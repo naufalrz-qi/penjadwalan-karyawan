@@ -370,15 +370,16 @@
 
 {% block extra_js %}
 <script>
+// @ts-nocheck
 /* ── State ── */
 const SHIFTS  = ['','PAGI','SIANG','OFF','CUTI'];
 const LABELS  = {'':'','PAGI':'P','SIANG':'S','OFF':'OFF','CUTI':'CT'};
 const CLASSES = {'':'','PAGI':'bg-pagi','SIANG':'bg-siang','OFF':'bg-off','CUTI':'bg-cuti'};
 
-const DATES   = {{ period.dates | tojson }};
-const SCHED   = {{ period.schedule | tojson }};      // {eid: {date: status}}
-const OFF_DAYS  = {{ period.off_days  | tojson }};   // {eid: [dates]}
-const CUTI_DAYS = {{ period.cuti_days | tojson }};   // {eid: [dates]}
+const DATES   = JSON.parse('{{ period.dates | tojson | safe }}');
+const SCHED   = JSON.parse('{{ period.schedule | tojson | safe }}');      // {eid: {date: status}}
+const OFF_DAYS  = JSON.parse('{{ period.off_days | tojson | safe }}');   // {eid: [dates]}
+const CUTI_DAYS = JSON.parse('{{ period.cuti_days | tojson | safe }}');   // {eid: [dates]}
 
 /* running copy for drawer */
 let dEid = null, dOffSet = new Set(), dCutiSet = new Set();

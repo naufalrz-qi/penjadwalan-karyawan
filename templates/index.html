@@ -116,8 +116,8 @@
     <div class="row g-3">
         {% for s in schedules %}
         <div class="col-sm-6 col-md-4 col-lg-3">
-            <div class="card sched-card h-100 shadow-sm border-0" style="animation-delay:{{ loop.index0 * 65 }}ms"
-                 onclick="window.location='{{ url_for('schedule_view', pk=s.key) }}'">
+            <div class="card sched-card h-100 shadow-sm border-0" {{ ('style="animation-delay:' ~ (loop.index0 * 65) ~ 'ms;"') | safe }}
+                 onclick="window.location='{{ url_for('schedule_setup', pk=s.key) if not s.generated else url_for('schedule_view', pk=s.key) }}'">
                 <div class="card-top-bar {% if s.generated %}done{% endif %}"></div>
                 <div class="card-body pb-2">
                     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -125,12 +125,10 @@
                             <i class="bi bi-{% if s.generated %}check-circle{% else %}pencil{% endif %} me-1"></i>
                             {{ 'Sudah Generate' if s.generated else 'Draft' }}
                         </span>
-                        <form action="{{ url_for('delete_schedule', pk=s.key) }}" method="POST"
-                              onsubmit="return confirm('Hapus jadwal {{ s.label }}?')" onclick="event.stopPropagation()">
-                            <button class="btn btn-sm btn-link text-danger p-0" style="font-size:0.8rem;">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </form>
+                        <button class="btn btn-sm btn-link text-danger p-0" style="font-size:0.8rem;"
+                                onclick="event.stopPropagation(); deleteSchedule('{{ s.key }}', '{{ s.label }}', this)">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
                     <div class="d-flex align-items-center gap-3">
                         <div class="month-icon"><i class="bi bi-calendar-event"></i></div>
@@ -143,8 +141,9 @@
                     </div>
                 </div>
                 <div class="card-footer px-3 pb-3 pt-2" onclick="event.stopPropagation()">
-                    <a href="{{ url_for('schedule_view', pk=s.key) }}" class="btn btn-view {% if s.generated %}btn-outline-primary{% else %}btn-primary{% endif %}">
-                        <i class="bi bi-{% if s.generated %}eye{% else %}magic{% endif %} me-1"></i>
+                    <a href="{{ url_for('schedule_setup', pk=s.key) if not s.generated else url_for('schedule_view', pk=s.key) }}"
+                       class="btn btn-view {% if s.generated %}btn-outline-primary{% else %}btn-primary{% endif %}">
+                        <i class="bi bi-{% if s.generated %}eye{% else %}sliders{% endif %} me-1"></i>
                         {{ 'Lihat Jadwal' if s.generated else 'Atur & Generate' }}
                     </a>
                 </div>
@@ -214,7 +213,7 @@
                 <div class="modal-footer border-0 pt-2">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-magic me-1"></i> Buat & Generate
+                        <i class="bi bi-calendar-check me-1"></i> Buat Jadwal
                     </button>
                 </div>
             </form>
@@ -237,5 +236,32 @@ document.querySelectorAll('.btn-check').forEach(r => {
         lbl.classList.add('btn-primary','text-white');
     });
 });
+
+// CSR delete — hapus card tanpa reload halaman
+function deleteSchedule(pk, label, btn) {
+    if (!confirm(`Hapus jadwal ${label}?`)) return;
+    fetch(`/schedule/${pk}/delete`, { method: 'POST' })
+        .then(r => {
+            if (r.ok || r.redirected) {
+                // Hapus card dari DOM
+                const card = btn.closest('.col-sm-6');
+                card.style.transition = 'opacity 0.3s, transform 0.3s';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    card.remove();
+                    // Update stat chips
+                    const chips = document.querySelectorAll('.chip-val');
+                    const total = document.querySelectorAll('.sched-card').length;
+                    const done  = document.querySelectorAll('.card-top-bar.done').length;
+                    if (chips[0]) chips[0].textContent = total;
+                    if (chips[1]) chips[1].textContent = done;
+                    if (chips[2]) chips[2].textContent = total - done;
+                    // Tampilkan empty state jika tidak ada kartu tersisa
+                    if (total === 0) location.reload();
+                }, 300);
+            }
+        });
+}
 </script>
 {% endblock %}

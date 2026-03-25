@@ -114,7 +114,7 @@ tr:hover .emp-avatar { transform:scale(1.12); }
                         </tr>
                         {% for e in emps %}
                         <tr class="emp-row" data-name="{{ e.name|lower }}" data-jd="{{ e.jobdesk|lower }}"
-                            style="animation-delay:{{ loop.index * 30 }}ms">
+                            {{ ('style="animation-delay:' ~ (loop.index * 30) ~ 'ms;"') | safe }}>
                             <td class="ps-4">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="emp-avatar">{{ e.name[:2]|upper }}</span>

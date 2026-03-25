@@ -254,13 +254,14 @@
 
 {% block extra_js %}
 <script>
+// @ts-nocheck
 const LABELS  = {'':'','OFF':'OFF','CUTI':'CT'};
 const CLASSES = {'':'','OFF':'bg-off','CUTI':'bg-cuti'};
 
-const DATES   = {{ period.dates | tojson }};
-const SCHED   = {{ period.schedule | default({}) | tojson }};
-const OFF_DAYS  = {{ period.off_days  | tojson }};
-const CUTI_DAYS = {{ period.cuti_days | tojson }};
+const DATES   = JSON.parse('{{ period.dates | tojson | safe }}');
+const SCHED   = JSON.parse('{{ period.schedule | default({}) | tojson | safe }}');
+const OFF_DAYS  = JSON.parse('{{ period.off_days | tojson | safe }}');
+const CUTI_DAYS = JSON.parse('{{ period.cuti_days | tojson | safe }}');
 
 let dEid = null, dOffSet = new Set(), dCutiSet = new Set();
 let paintMode = 'normal';
