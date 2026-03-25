@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ShiftMaster Pro{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f8fafc;
+            --sidebar: #0f172a;
+            --glass: rgba(255,255,255,0.85);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+
+        /* ── Navbar ── */
+        @keyframes navDown { from{opacity:0;transform:translateY(-100%)} to{opacity:1;transform:translateY(0)} }
+        .navbar {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            padding: 0.7rem 1.5rem;
+            animation: navDown 0.4s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        .navbar-brand {
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--primary) !important;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .brand-icon {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: linear-gradient(135deg,#4f46e5,#6366f1);
+            display: flex; align-items:center; justify-content:center;
+            color:white; font-size:0.85rem;
+        }
+        .nav-link {
+            position: relative;
+            color: #475569 !important;
+            font-weight: 500;
+            font-size: 0.88rem;
+            transition: color 0.2s ease;
+            padding: 0.4rem 0.85rem !important;
+        }
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            left: 0.85rem; right: 0.85rem;
+            bottom: -2px; height: 2px;
+            background: var(--primary);
+            border-radius: 2px;
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+        }
+        .nav-link:hover { color: var(--primary) !important; }
+        .nav-link:hover::after, .nav-link.active::after { transform: scaleX(1); }
+        .nav-link.active { color: var(--primary) !important; font-weight: 600; }
+
+        /* ── Page transition ── */
+        @keyframes pageIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        main { animation: pageIn 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+        /* ── Cards ── */
+        .card {
+            border-radius: var(--radius) !important;
+            border: 1px solid #e2e8f0 !important;
+            transition: transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s ease;
+        }
+        .card:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.08) !important; }
+
+        /* ── Buttons ── */
+        .btn { position: relative; overflow: hidden; border-radius: 10px; font-weight: 600; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .ripple {
+            position: absolute; border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            transform: scale(0);
+            animation: rippleAnim 0.55s linear;
+            pointer-events: none;
+        }
+        @keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* ── Table ── */
+        .sched-table th {
+            background: #f1f5f9 !important;
+            color: #475569; font-weight: 600;
+            font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .sticky-col {
+            position: sticky; left: 0;
+            background: white !important;
+            z-index: 20;
+            border-right: 2px solid #f1f5f9 !important;
+            min-width: 170px;
+        }
+        tbody tr { transition: background 0.15s ease; }
+        tbody tr:hover { background: rgba(79,70,229,0.03) !important; }
+
+        /* ── Shift badges ── */
+        .shift-cell {
+            width: 36px; height: 36px; padding: 0 !important;
+            cursor: pointer; border: 1px solid #f1f5f9 !important;
+            transition: transform 0.18s cubic-bezier(0.22,1,0.36,1);
+        }
+        .shift-cell:hover { transform: scale(1.15); z-index: 5; border-radius: 8px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
+        .shift-badge {
+            width:100%; height:100%;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:800; font-size:0.65rem;
+        }
+        .bg-pagi  { background:#fef3c7; color:#92400e; }
+        .bg-siang { background:#dbeafe; color:#1e40af; }
+        .bg-off   { background:#fee2e2; color:#991b1b; }
+        .bg-cuti  { background:#dcfce7; color:#166534; }
+        @keyframes cellPop { 0%{transform:scale(0.7)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+        .shift-badge.pop { animation: cellPop 0.25s cubic-bezier(0.22,1,0.36,1); }
+
+        /* ── Global toast ── */
+        #gToast {
+            position:fixed; bottom:1.5rem; right:1.5rem; z-index:99999;
+            background:#0f172a; color:white;
+            border-radius:14px; padding:0.7rem 1.2rem;
+            font-size:0.83rem; font-weight:500;
+            display:flex; align-items:center; gap:0.5rem;
+            box-shadow:0 12px 32px rgba(0,0,0,0.25);
+            transform:translateY(80px); opacity:0;
+            transition:transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
+            pointer-events:none; min-width:180px;
+        }
+        #gToast.show { transform:translateY(0); opacity:1; }
+        #gToast.err  { background:#991b1b; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">
+            <div class="brand-icon"><i class="bi bi-calendar-event-fill"></i></div>
+            ShiftMaster<span class="text-dark fw-normal">Pro</span>
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <i class="bi bi-list fs-5"></i>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="/">
+                        <i class="bi bi-grid me-1"></i>Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'employees' %}active{% endif %}" href="/employees">
+                        <i class="bi bi-people me-1"></i>Pegawai
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}" href="/settings">
+                        <i class="bi bi-gear me-1"></i>Pengaturan
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<main>{% block content %}{% endblock %}</main>
+
+{% block modals %}{% endblock %}
+
+<div id="gToast"><i class="bi bi-check-circle-fill"></i><span id="gMsg">OK</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+<script>
+/* Ripple */
+document.querySelectorAll('.btn').forEach(b => b.addEventListener('click', function(e){
+    const r = document.createElement('span'); r.className = 'ripple';
+    const rect = this.getBoundingClientRect(), size = Math.max(rect.width, rect.height);
+    r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px`;
+    this.appendChild(r); setTimeout(()=>r.remove(), 600);
+}));
+
+/* Global toast */
+function gToast(msg, ok=true) {
+    const t = document.getElementById('gToast');
+    document.getElementById('gMsg').textContent = msg;
+    t.querySelector('i').className = ok ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill';
+    t.classList.toggle('err', !ok);
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+</script>
+</body>
+</html>

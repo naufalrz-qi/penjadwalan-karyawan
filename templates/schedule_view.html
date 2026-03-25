@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{% block title %}{{ period.label }} — ShiftMaster Pro{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Header ── */
+.view-header { padding: 1.5rem 0 1rem; }
+.view-header h1 { font-weight: 800; letter-spacing: -0.5px; }
+.btn-export, .btn-regen {
+    border-radius: 10px; font-size: 0.82rem; font-weight: 600;
+    padding: 0.45rem 1rem; border: 1.5px solid #e2e8f0; background: white;
+    transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
+}
+.btn-export:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.1); }
+.btn-regen { background: linear-gradient(135deg,#4f46e5,#6366f1); color:white; border:none; box-shadow:0 4px 12px rgba(79,70,229,0.3); }
+.btn-regen:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(79,70,229,0.4); color:white; }
+
+/* ── Stat cards ── */
+@keyframes statIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.stat-card { animation: statIn 0.4s cubic-bezier(0.22,1,0.36,1) both; border-radius:14px !important; }
+.stat-icon { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem; }
+
+/* ── Table ── */
+.table-wrap { border-radius:16px; overflow:hidden; border:1px solid #e2e8f0; animation: statIn 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
+.emp-name-cell {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+.emp-name-cell:hover { color: var(--primary) !important; }
+.emp-name-cell:hover .emp-av { transform: scale(1.12); }
+.emp-av {
+    width:28px;height:28px;border-radius:50%;
+    background:linear-gradient(135deg,#818cf8,#4f46e5);
+    color:white;font-size:0.6rem;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center;
+    margin-right:0.5rem;flex-shrink:0;
+    box-shadow:0 2px 6px rgba(79,70,229,0.25);
+    transition:transform 0.2s ease;
+}
+.off-badge {
+    font-size:0.6rem; background:#f1f5f9; color:#64748b;
+    border-radius:10px; padding:0.1em 0.5em; font-weight:600; margin-left:0.4rem;
+    transition:all 0.2s ease;
+}
+.off-badge.has-off { background:#fee2e2; color:#991b1b; }
+
+/* ── OFF Drawer ── */
+#offDrawer {
+    position: fixed; top:0; right:0; height:100vh; width:360px;
+    background:white; z-index:1050;
+    box-shadow: -16px 0 48px rgba(0,0,0,0.12);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+    display: flex; flex-direction: column;
+}
+#offDrawer.open { transform: translateX(0); }
+#drawerOverlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1049;
+    opacity:0; pointer-events:none;
+    transition: opacity 0.3s ease;
+}
+#drawerOverlay.show { opacity:1; pointer-events:all; }
+
+.drawer-head {
+    padding: 1.25rem 1.25rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: linear-gradient(135deg,#f8faff,#eef2ff);
+}
+.drawer-body { flex:1; overflow-y:auto; padding:1.25rem; }
+.drawer-footer { padding:1rem 1.25rem; border-top:1px solid #f1f5f9; display:flex; gap:0.5rem; }
+
+/* Mini calendar in drawer */
+.mini-cal { width:100%; border-collapse:collapse; }
+.mini-cal th { font-size:0.65rem; text-align:center; color:#94a3b8; padding:0.25rem; font-weight:600; }
+.mini-cal td { padding:0.2rem; text-align:center; }
+.cal-day {
+    width:36px; height:36px; border-radius:8px;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:0.78rem; font-weight:600; cursor:pointer;
+    border:2px solid transparent;
+    transition: all 0.18s cubic-bezier(0.22,1,0.36,1);
+    user-select:none;
+}
+.cal-day:hover { background:#f1f5f9; }
+.cal-day.is-off  { background:#fee2e2 !important; border-color:#fecaca; color:#991b1b; }
+.cal-day.is-cuti { background:#dcfce7 !important; border-color:#bbf7d0; color:#166534; }
+.cal-day.outside { opacity:0.25; cursor:default; }
+.cal-day.today-mark { border-color:#c7d2fe; }
+
+/* Quick patterns */
+.pattern-btn {
+    font-size:0.75rem; border-radius:8px; padding:0.3rem 0.75rem;
+    border:1.5px solid #e2e8f0; background:white; color:#475569; font-weight:600;
+    cursor:pointer; transition:all 0.18s ease;
+}
+.pattern-btn:hover { border-color:var(--primary); color:var(--primary); background:#f5f3ff; }
+
+/* Legend */
+.legend-dot { width:10px;height:10px;border-radius:50%;display:inline-block; }
+
+/* Branch separator */
+.branch-sep td { background:linear-gradient(90deg,#f1f5f9,#f8fafc) !important; border-left:3px solid var(--primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+
+    <!-- Header -->
+    <div class="view-header d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1" style="font-size:0.78rem;">
+                    <li class="breadcrumb-item"><a href="/" class="text-decoration-none" style="color:var(--primary);">Dashboard</a></li>
+                    <li class="breadcrumb-item active fw-semibold">{{ period.label }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">{{ period.label }}</h1>
+            <div class="text-muted small mt-1">
+                <i class="bi bi-calendar-range me-1"></i>
+                Periode: {{ period.dates[0] }} s/d {{ period.dates[-1] }}
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <div class="d-flex align-items-center gap-2 me-2" style="font-size:0.75rem;">
+                <span class="legend-dot" style="background:#fef3c7;border:1px solid #fde68a;"></span>Pagi
+                <span class="legend-dot" style="background:#dbeafe;border:1px solid #bfdbfe;"></span>Siang
+                <span class="legend-dot" style="background:#fee2e2;border:1px solid #fecaca;"></span>OFF
+                <span class="legend-dot" style="background:#dcfce7;border:1px solid #bbf7d0;"></span>Cuti
+            </div>
+            <button class="btn btn-export" onclick="openExportModal('excel')">
+                <i class="bi bi-file-earmark-excel text-success me-1"></i>Excel
+            </button>
+            <button class="btn btn-export" onclick="openExportModal('pdf')">
+                <i class="bi bi-file-earmark-pdf text-danger me-1"></i>PDF
+            </button>
+            <button onclick="regenSchedule()" class="btn btn-regen">
+                <i class="bi bi-arrow-clockwise me-1"></i>Re-generate
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    {% set tp = summary.values()|map(attribute='PAGI')|sum %}
+    {% set ts = summary.values()|map(attribute='SIANG')|sum %}
+    {% set to = summary.values()|map(attribute='OFF')|sum %}
+    {% set tc = summary.values()|map(attribute='CUTI')|sum %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="card stat-card p-3 border-0 shadow-sm" style="animation-delay:0ms"><div class="d-flex gap-3 align-items-center"><div class="stat-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-sun"></i></div><div><div style="font-size:0.72rem;color:#64748b;">Pagi</div><div class="fw-800 h5 mb-0 text-warning" style="font-weight:800;">{{ tp }}</div></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card stat-card p-3 border-0 shadow-sm" style="animation-delay:70ms"><div class="d-flex gap-3 align-items-center"><div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="bi bi-moon"></i></div><div><div style="font-size:0.72rem;color:#64748b;">Siang</div><div class="fw-800 h5 mb-0 text-primary" style="font-weight:800;">{{ ts }}</div></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card stat-card p-3 border-0 shadow-sm" style="animation-delay:140ms"><div class="d-flex gap-3 align-items-center"><div class="stat-icon" style="background:#fee2e2;color:#dc2626;"><i class="bi bi-x-circle"></i></div><div><div style="font-size:0.72rem;color:#64748b;">OFF</div><div class="fw-800 h5 mb-0 text-danger" style="font-weight:800;">{{ to }}</div></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card stat-card p-3 border-0 shadow-sm" style="animation-delay:210ms"><div class="d-flex gap-3 align-items-center"><div class="stat-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-calendar-check"></i></div><div><div style="font-size:0.72rem;color:#64748b;">Cuti</div><div class="fw-800 h5 mb-0 text-success" style="font-weight:800;">{{ tc }}</div></div></div></div></div>
+    </div>
+
+    <!-- Info bar -->
+    <div class="alert alert-light border d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 py-2 px-3" style="border-radius:12px !important;font-size:0.82rem;">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle text-primary"></i>
+            <span><strong>Tips:</strong> Klik tanggal untuk set libur seharian. Klik sel untuk ganti shift. Klik nama untuk atur pola bulanan.</span>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('normal')" id="btnNormal" style="background:#f8fafc;font-weight:600;"><i class="bi bi-cursor me-1"></i>Pilih</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_pagi')" id="btnKuasPagi" style="color:#d97706;"><i class="bi bi-brush me-1"></i>Pagi</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_siang')" id="btnKuasSiang" style="color:#1d4ed8;"><i class="bi bi-brush me-1"></i>Siang</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_off')" id="btnKuasOff" style="color:#dc2626;"><i class="bi bi-brush me-1"></i>OFF</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_cuti')" id="btnKuasCuti" style="color:#16a34a;"><i class="bi bi-brush me-1"></i>Cuti</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_hapus')" id="btnKuasHapus" style="color:#64748b;"><i class="bi bi-eraser me-1"></i>Hapus</button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap shadow-sm mb-5">
+        <div class="table-responsive">
+            <table class="table table-hover sched-table mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th class="sticky-col py-3 ps-3">Pegawai</th>
+                        {% for d in period.dates %}
+                        <th class="text-center col-date" style="min-width:38px; cursor:pointer; transition:background 0.2s;" title="Set libur seharian" onclick="setColumnOff('{{ d }}')" id="hdr-{{ d }}">
+                            {{ d[8:] }}<br>
+                            <span class="opacity-50" style="font-size:0.55rem;">{{ d[5:7] }}</span><br>
+                            <span class="day-name" style="font-size:0.5rem;font-weight:700;letter-spacing:0.01em;"></span>
+                        </th>
+                        {% endfor %}
+                        <th class="text-center bg-light" style="min-width:36px;">Σ P</th>
+                        <th class="text-center bg-light" style="min-width:36px;">Σ S</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bid, b_data in by_branch.items() %}
+                    <tr class="branch-sep">
+                        <td colspan="{{ period.dates|length + 3 }}" class="py-2 ps-3">
+                            <span class="badge rounded-pill" style="background:rgba(79,70,229,0.1);color:var(--primary);font-size:0.72rem;">
+                                <i class="bi bi-building me-1"></i>{{ b_data.branch.name }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% for jd, emps in b_data.by_jobdesk.items() %}
+                    {% for e in emps %}
+                    <tr class="emp-row" data-eid="{{ e.id }}" data-gender="{{ e.gender|default('P') }}">
+                        <td class="sticky-col py-2 ps-3">
+                            <div class="d-flex align-items-center emp-name-cell"
+                                 onclick="openDrawer('{{ e.id }}','{{ e.name }}')">
+                                <span class="emp-av">{{ e.name[:2]|upper }}</span>
+                                <div>
+                                    <div class="fw-semibold" style="font-size:0.83rem;">{{ e.name }}</div>
+                                    <div style="font-size:0.68rem;color:#94a3b8;">
+                                        {{ e.jobdesk }}
+                                        <span class="off-badge" id="ob-{{ e.id }}">0 OFF</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        {% for d in period.dates %}
+                        {% set st = period.schedule.get(e.id, {}).get(d, '') %}
+                        <td class="shift-cell p-0 text-center position-relative" onmousedown="cellInteract('{{ e.id }}','{{ d }}',this, event)" onmouseenter="cellDrag('{{ e.id }}','{{ d }}',this, event)" title="{{ d }}">
+                            <div class="shift-badge {% if st=='PAGI' %}bg-pagi{% elif st=='SIANG' %}bg-siang{% elif st=='OFF' %}bg-off{% elif st=='CUTI' %}bg-cuti{% endif %}">
+                                {{ 'P' if st=='PAGI' else 'S' if st=='SIANG' else 'OFF' if st=='OFF' else 'CT' if st=='CUTI' else '' }}
+                            </div>
+                        </td>
+                        {% endfor %}
+                        <td class="text-center fw-bold bg-light" style="font-size:0.8rem;color:#d97706;" id="sp-{{ e.id }}">{{ summary[e.id].PAGI }}</td>
+                        <td class="text-center fw-bold bg-light" style="font-size:0.8rem;color:#1d4ed8;" id="ss-{{ e.id }}">{{ summary[e.id].SIANG }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+                <tfoot class="sticky-bottom shadow-sm" style="z-index: 10; font-size: 0.75rem; background:#fff; border-top: 2px solid #cbd5e1;">
+                    <tr>
+                        <th class="py-2 ps-3 text-end text-muted" style="position:sticky;left:0;z-index:11;background:#f8fafc;border-right:1px solid #e2e8f0;font-weight:600;"><i class="bi bi-people-fill me-1"></i>Libur/Cuti</th>
+                        {% for d in period.dates %}
+                        <th class="text-center bg-light" id="ft-off-{{ d }}">0</th>
+                        {% endfor %}
+                        <th colspan="2" class="bg-light"></th>
+                    </tr>
+                    <tr>
+                        <th class="py-1 ps-3 text-end text-muted" style="position:sticky;left:0;z-index:11;background:#f8fafc;border-right:1px solid #e2e8f0;font-weight:500;">Ratio P/W</th>
+                        {% for d in period.dates %}
+                        <th class="text-center text-secondary font-monospace bg-light" style="font-size:0.7rem;" id="ft-gender-{{ d }}">0/0</th>
+                        {% endfor %}
+                        <th colspan="2" class="bg-light"></th>
+                    </tr>
+                    <tr>
+                        <th class="py-1 ps-3 text-end text-muted" style="position:sticky;left:0;z-index:11;background:#f8fafc;border-right:1px solid #e2e8f0;font-weight:500;">Ratio P/S</th>
+                        {% for d in period.dates %}
+                        <th class="text-center text-secondary font-monospace bg-light" style="font-size:0.7rem;" id="ft-ps-{{ d }}">0/0</th>
+                        {% endfor %}
+                        <th colspan="2" class="bg-light"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ══ OFF DRAWER ══ -->
+<div id="drawerOverlay" onclick="closeDrawer()"></div>
+<div id="offDrawer">
+    <div class="drawer-head">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-bold" id="dName" style="font-size:1rem;"></div>
+                <div class="text-muted small mt-0">Atur hari OFF &amp; Cuti</div>
+            </div>
+            <button class="btn btn-sm btn-light rounded-circle" onclick="closeDrawer()" style="width:32px;height:32px;padding:0;">
+                <i class="bi bi-x-lg" style="font-size:0.78rem;"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="drawer-body">
+        <!-- Legend dalam drawer -->
+        <div class="d-flex gap-3 mb-3" style="font-size:0.73rem;">
+            <span><span class="legend-dot me-1" style="background:#fee2e2;border:1px solid #fecaca;display:inline-block;width:10px;height:10px;border-radius:50%;"></span>OFF</span>
+            <span><span class="legend-dot me-1" style="background:#dcfce7;border:1px solid #bbf7d0;display:inline-block;width:10px;height:10px;border-radius:50%;"></span>Cuti</span>
+            <span style="color:#94a3b8;">klik sekali = OFF · dua kali = Cuti · tiga kali = hapus</span>
+        </div>
+
+        <!-- Quick patterns -->
+        <div class="mb-3">
+            <div class="text-muted small fw-semibold mb-2" style="letter-spacing:0.04em;font-size:0.68rem;">POLA CEPAT</div>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="pattern-btn" onclick="setPattern('sun')"><i class="bi bi-sun me-1"></i>Setiap Minggu</button>
+                <button class="pattern-btn" onclick="setPattern('sat')"><i class="bi bi-calendar-week me-1"></i>Setiap Sabtu</button>
+                <button class="pattern-btn" onclick="setPattern('weekend')"><i class="bi bi-calendar2-week me-1"></i>Sabtu-Minggu</button>
+                <button class="pattern-btn" onclick="clearAll()"><i class="bi bi-x-circle me-1"></i>Hapus Semua</button>
+            </div>
+        </div>
+
+        <!-- Mini calendar -->
+        <div class="text-muted small fw-semibold mb-2" style="letter-spacing:0.04em;font-size:0.68rem;">PILIH TANGGAL</div>
+        <table class="mini-cal">
+            <thead>
+                <tr>
+                    <th>Min</th><th>Sen</th><th>Sel</th><th>Rab</th><th>Kam</th><th>Jum</th><th>Sab</th>
+                </tr>
+            </thead>
+            <tbody id="calBody"></tbody>
+        </table>
+
+        <div class="mt-3 p-3 rounded-3" style="background:#f8fafc;font-size:0.75rem;color:#64748b;">
+            <i class="bi bi-lightbulb me-1 text-warning"></i>
+            Setelah atur OFF/Cuti, klik <strong>Simpan & Re-generate</strong> agar jadwal diperbarui otomatis.
+        </div>
+    </div>
+
+    <div class="drawer-footer">
+        <button class="btn btn-light flex-fill" onclick="closeDrawer()">Tutup</button>
+        <button class="btn btn-primary flex-fill" onclick="saveAndRegen()" id="saveRegenBtn">
+            <i class="bi bi-magic me-1"></i> Simpan &amp; Re-generate
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Shift Picker Popover (Not a modal, appended on click) -->
+<div id="shiftPicker" class="shadow-lg border" style="display:none; position:absolute; z-index:1100; background:white; border-radius:12px; padding:0.4rem; gap:0.3rem;">
+    <button class="sp-btn bg-pagi" onclick="pickShift('PAGI')">P</button>
+    <button class="sp-btn bg-siang" onclick="pickShift('SIANG')">S</button>
+    <button class="sp-btn bg-off" onclick="pickShift('OFF')">OFF</button>
+    <button class="sp-btn bg-cuti" onclick="pickShift('CUTI')">CT</button>
+    <button class="sp-btn bg-light text-muted" onclick="pickShift('')"><i class="bi bi-x-lg"></i></button>
+</div>
+<style>
+.sp-btn { border:none; width:34px; height:34px; border-radius:8px; font-weight:700; font-size:0.75rem; transition:transform 0.1s; }
+.sp-btn:hover { transform:scale(1.1); }
+.sp-btn.bg-light:hover { background:#e2e8f0 !important; }
+.col-date:hover { background:#f1f5f9; }
+</style>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Export Jadwal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pb-0">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Format Export</label>
+                    <select id="exportFormat" class="form-select">
+                        <option value="excel">Excel (.xlsx)</option>
+                        <option value="pdf">PDF (.pdf)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Pilih Cabang</label>
+                    <select id="exportBranch" class="form-select">
+                        <option value="">Semua Cabang</option>
+                        {% for b in settings.branches %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary px-4" onclick="doExport()">
+                    <i class="bi bi-download me-1"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── State ── */
+const SHIFTS  = ['','PAGI','SIANG','OFF','CUTI'];
+const LABELS  = {'':'','PAGI':'P','SIANG':'S','OFF':'OFF','CUTI':'CT'};
+const CLASSES = {'':'','PAGI':'bg-pagi','SIANG':'bg-siang','OFF':'bg-off','CUTI':'bg-cuti'};
+
+const DATES   = {{ period.dates | tojson }};
+const SCHED   = {{ period.schedule | tojson }};      // {eid: {date: status}}
+const OFF_DAYS  = {{ period.off_days  | tojson }};   // {eid: [dates]}
+const CUTI_DAYS = {{ period.cuti_days | tojson }};   // {eid: [dates]}
+
+/* running copy for drawer */
+let dEid = null, dOffSet = new Set(), dCutiSet = new Set();
+let paintMode = 'normal'; // normal | kuas_off | kuas_cuti
+let isDragging = false;
+let activePicker = null; // {eid, date, td}
+
+document.body.addEventListener('mouseup', () => { isDragging = false; });
+document.addEventListener('click', (e) => {
+    if (activePicker && !e.target.closest('#shiftPicker') && !e.target.closest('.shift-cell')) {
+        closePicker();
+    }
+});
+
+/* ── Init OFF badge counters ── */
+document.querySelectorAll('[data-eid]').forEach(row => {
+    const eid = row.dataset.eid;
+    refreshOffBadge(eid);
+});
+
+function refreshOffBadge(eid) {
+    const badge = document.getElementById('ob-' + eid);
+    if (!badge) return;
+    const odays = (OFF_DAYS[eid] || []).length;
+    const cdays = (CUTI_DAYS[eid] || []).length;
+    badge.textContent = odays + ' OFF' + (cdays ? ' · ' + cdays + ' CT' : '');
+    badge.classList.toggle('has-off', odays > 0 || cdays > 0);
+}
+
+/* ── UI Modes & Painting ── */
+function toggleMode(mode) {
+    paintMode = mode;
+    document.getElementById('btnNormal').style.background = mode === 'normal' ? '#f8fafc' : 'white';
+    document.getElementById('btnKuasPagi').style.background = mode === 'kuas_pagi' ? '#fef3c7' : 'white';
+    document.getElementById('btnKuasSiang').style.background = mode === 'kuas_siang' ? '#dbeafe' : 'white';
+    document.getElementById('btnKuasOff').style.background = mode === 'kuas_off' ? '#fee2e2' : 'white';
+    document.getElementById('btnKuasCuti').style.background = mode === 'kuas_cuti' ? '#dcfce7' : 'white';
+    document.getElementById('btnKuasHapus').style.background = mode === 'kuas_hapus' ? '#f1f5f9' : 'white';
+    closePicker();
+}
+
+async function cellInteract(eid, date, td, e) {
+    if (e.button !== 0) return; // only left click
+    if (paintMode === 'normal') {
+        openPicker(eid, date, td);
+    } else {
+        isDragging = true;
+        applyPaint(eid, date, td);
+    }
+}
+
+function cellDrag(eid, date, td, e) {
+    if (isDragging && paintMode !== 'normal') {
+        applyPaint(eid, date, td);
+    }
+}
+
+/* ── Picker ── */
+function openPicker(eid, date, td) {
+    activePicker = {eid, date, td};
+    const picker = document.getElementById('shiftPicker');
+    const rect = td.getBoundingClientRect();
+    
+    // Position picker near the cell
+    picker.style.display = 'flex';
+    picker.style.top = (window.scrollY + rect.top - picker.offsetHeight - 5) + 'px';
+    
+    // Adjust horizontal position if too close to right edge
+    let leftPos = rect.left + (rect.width / 2) - (picker.offsetWidth / 2);
+    if (leftPos + picker.offsetWidth > window.innerWidth) {
+        leftPos = window.innerWidth - picker.offsetWidth - 10;
+    }
+    picker.style.left = leftPos + 'px';
+}
+
+function closePicker() {
+    document.getElementById('shiftPicker').style.display = 'none';
+    activePicker = null;
+}
+
+function pickShift(shiftVal) {
+    if (!activePicker) return;
+    const {eid, date, td} = activePicker;
+    updateShiftCell(eid, date, td, shiftVal);
+    closePicker();
+}
+
+function applyPaint(eid, date, td) {
+    let shiftVal = '';
+    if (paintMode === 'kuas_off') shiftVal = 'OFF';
+    else if (paintMode === 'kuas_cuti') shiftVal = 'CUTI';
+    else if (paintMode === 'kuas_pagi') shiftVal = 'PAGI';
+    else if (paintMode === 'kuas_siang') shiftVal = 'SIANG';
+    else if (paintMode === 'kuas_hapus') shiftVal = '';
+    
+    // Avoid redundant calls
+    const curBadge = td.querySelector('.shift-badge');
+    const isOff = curBadge.classList.contains('bg-off');
+    const isCuti = curBadge.classList.contains('bg-cuti');
+    const isPagi = curBadge.classList.contains('bg-pagi');
+    const isSiang = curBadge.classList.contains('bg-siang');
+    const isEmpty = !(isOff || isCuti || isPagi || isSiang);
+    
+    if (shiftVal === 'OFF' && isOff) return;
+    if (shiftVal === 'CUTI' && isCuti) return;
+    if (shiftVal === 'PAGI' && isPagi) return;
+    if (shiftVal === 'SIANG' && isSiang) return;
+    if (shiftVal === '' && isEmpty) return;
+        
+    updateShiftCell(eid, date, td, shiftVal);
+}
+
+function calculateDailyStats() {
+    const dates = JSON.parse('{{ period.dates|tojson }}');
+    dates.forEach((date, i) => {
+        let offCutiCount = 0;
+        let pCount = 0;
+        let sCount = 0;
+        let maleCount = 0;
+        let femaleCount = 0;
+        
+        // Find all cells for this colIdx
+        // col 0 = name, so date col is i+1
+        const colIdx = i + 1;
+        document.querySelectorAll('tbody tr.emp-row').forEach(tr => {
+            const gender = tr.getAttribute('data-gender');
+            const td = tr.children[colIdx];
+            if (!td) return;
+            const badge = td.querySelector('.shift-badge');
+            if (!badge) return;
+            
+            const isOff = badge.classList.contains('bg-off');
+            const isCuti = badge.classList.contains('bg-cuti');
+            const isPagi = badge.classList.contains('bg-pagi');
+            const isSiang = badge.classList.contains('bg-siang');
+            
+            if (isOff || isCuti) {
+                offCutiCount++;
+            } else if (isPagi || isSiang) {
+                if (isPagi) pCount++;
+                if (isSiang) sCount++;
+                
+                if (gender === 'P') {
+                    maleCount++;
+                } else if (gender === 'W') {
+                    femaleCount++;
+                }
+            }
+        });
+        
+        const thOff = document.getElementById('ft-off-' + date);
+        if(thOff) {
+            thOff.textContent = offCutiCount;
+            if(offCutiCount > 2) {
+                thOff.className = 'text-center text-danger fw-bold bg-light';
+            } else {
+                thOff.className = 'text-center fw-semibold text-secondary bg-light';
+            }
+        }
+        
+        const thGender = document.getElementById('ft-gender-' + date);
+        if(thGender) thGender.textContent = `${maleCount}P/${femaleCount}W`;
+        
+        const thPS = document.getElementById('ft-ps-' + date);
+        if(thPS) {
+            thPS.innerHTML = `<span style="color:#d97706;">${pCount}P</span>/<span style="color:#1d4ed8;">${sCount}S</span>`;
+        }
+    });
+}
+
+/* ── Save Cell Edit ── */
+async function updateShiftCell(eid, date, td, next) {
+    const badge = td.querySelector('.shift-badge');
+    badge.className = 'shift-badge ' + CLASSES[next];
+    badge.textContent = LABELS[next];
+    badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
+
+    try {
+        const r = await fetch("{{ url_for('edit_cell', pk=period.period_key) }}", {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({emp_id:eid, date:date, status:next})
+        });
+        if (!r.ok) throw new Error();
+        
+        // Update local SCHED state so summary updates correctly
+        if(!SCHED[eid]) SCHED[eid] = {};
+        SCHED[eid][date] = next;
+        
+        updateSumDisplay(eid);
+        calculateDailyStats();
+    } catch { gToast('Gagal simpan', false); }
+}
+
+/* ── Column (Day) Off ── */
+async function setColumnOff(dateStr) {
+    if(!confirm(`Set semua pegawai OFF pada tanggal ${dateStr}?`)) return;
+    
+    // Send to backend via batch if possible, or just individual cell updates
+    gToast('Menyiapkan OFF nasional...');
+    let promises = [];
+    document.querySelectorAll(`td[title="${dateStr}"]`).forEach(td => {
+        const tr = td.closest('tr');
+        if(!tr.dataset.eid) return;
+        const eid = tr.dataset.eid;
+        
+        // Update UI
+        const badge = td.querySelector('.shift-badge');
+        badge.className = 'shift-badge ' + CLASSES['OFF'];
+        badge.textContent = LABELS['OFF'];
+        
+        if(!SCHED[eid]) SCHED[eid] = {};
+        SCHED[eid][dateStr] = 'OFF';
+        updateSumDisplay(eid);
+        
+        const p = fetch("{{ url_for('edit_cell', pk=period.period_key) }}", {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({emp_id:eid, date:dateStr, status:'OFF'})
+        });
+        promises.append(p); // Oh wait, promises.push(p);
+    });
+    
+    promises = []; // let's do native correctly:
+    document.querySelectorAll(`td[title="${dateStr}"]`).forEach(td => {
+        const tr = td.closest('tr');
+        if(!tr.dataset.eid) return;
+        promises.push(
+            fetch("{{ url_for('edit_cell', pk=period.period_key) }}", {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({emp_id:tr.dataset.eid, date:dateStr, status:'OFF'})
+            })
+        );
+    });
+    
+    await Promise.all(promises);
+    gToast('Hari libur disimpan!');
+}
+
+async function updateSumDisplay(eid) {
+    /* re-fetch summary for this employee from current SCHED */
+    let p=0, s=0;
+    DATES.forEach(d => {
+        const st = (SCHED[eid]||{})[d];
+        if(st==='PAGI') p++; else if(st==='SIANG') s++;
+    });
+    const sp = document.getElementById('sp-'+eid);
+    const ss = document.getElementById('ss-'+eid);
+    if(sp) sp.textContent = p;
+    if(ss) ss.textContent = s;
+}
+
+/* ── Re-generate ── */
+async function regenSchedule() {
+    if (!confirm('Re-generate jadwal? Perubahan manual di tabel akan ditimpa.')) return;
+    const r = await fetch("{{ url_for('generate', pk=period.period_key) }}", {method:'POST'});
+    const d = await r.json();
+    if(d.success) { gToast('Jadwal di-generate!'); setTimeout(()=>location.reload(), 800); }
+    else gToast('Gagal generate', false);
+}
+
+/* ═══════════════════════════════════════
+   OFF DRAWER
+═══════════════════════════════════════ */
+function openDrawer(eid, name) {
+    dEid  = eid;
+    dOffSet  = new Set(OFF_DAYS[eid]  || []);
+    dCutiSet = new Set(CUTI_DAYS[eid] || []);
+    document.getElementById('dName').textContent = name;
+    buildCalendar();
+    document.getElementById('offDrawer').classList.add('open');
+    document.getElementById('drawerOverlay').classList.add('show');
+}
+
+function closeDrawer() {
+    document.getElementById('offDrawer').classList.remove('open');
+    document.getElementById('drawerOverlay').classList.remove('show');
+}
+
+function buildCalendar() {
+    /* figure out year/month from first date in period */
+    const first = new Date(DATES[0]);
+    const last  = new Date(DATES[DATES.length-1]);
+
+    /* We build a 2-month mini-cal covering the full period */
+    const periodSet = new Set(DATES);
+    const tbody = document.getElementById('calBody');
+    tbody.innerHTML = '';
+
+    /* collect all weeks spanning period */
+    let cur = new Date(first);
+    /* start from Sunday of that week */
+    cur.setDate(cur.getDate() - cur.getDay());
+
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    /* render rows */
+    while(cur <= last || cur.getDay() !== 0) {
+        const tr = document.createElement('tr');
+        for(let i=0;i<7;i++) {
+            const td = document.createElement('td');
+            const d = cur.toISOString().slice(0,10);
+            const inPeriod = periodSet.has(d);
+            const isOff  = dOffSet.has(d);
+            const isCuti = dCutiSet.has(d);
+            const isToday = cur.getTime() === today.getTime();
+
+            const btn = document.createElement('div');
+            btn.className = 'cal-day' + (isOff?' is-off':'') + (isCuti?' is-cuti':'') + (!inPeriod?' outside':'') + (isToday?' today-mark':'');
+            btn.textContent = cur.getDate();
+            btn.dataset.date = d;
+            if(inPeriod) btn.onclick = () => toggleCalDay(btn, d);
+
+            td.appendChild(btn);
+            tr.appendChild(td);
+            cur.setDate(cur.getDate()+1);
+        }
+        tbody.appendChild(tr);
+        if(cur > last && cur.getDay()===0) break;
+    }
+}
+
+function toggleCalDay(btn, d) {
+    if(dOffSet.has(d))  { dOffSet.delete(d); dCutiSet.add(d); btn.className='cal-day is-cuti'; }
+    else if(dCutiSet.has(d)) { dCutiSet.delete(d); btn.className='cal-day'; }
+    else { dOffSet.add(d); btn.className='cal-day is-off'; }
+}
+
+function setPattern(pat) {
+    /* reset only off/cuti */
+    dOffSet.clear(); dCutiSet.clear();
+    DATES.forEach(d => {
+        const wd = new Date(d).getDay(); /* 0=Sun,6=Sat */
+        if(pat==='sun'     && wd===0) dOffSet.add(d);
+        if(pat==='sat'     && wd===6) dOffSet.add(d);
+        if(pat==='weekend' && (wd===0||wd===6)) dOffSet.add(d);
+    });
+    buildCalendar();
+}
+
+function clearAll() { dOffSet.clear(); dCutiSet.clear(); buildCalendar(); }
+
+async function saveAndRegen() {
+    const btn = document.getElementById('saveRegenBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+
+    /* Build FormData for save_off endpoint */
+    const fd = new FormData();
+    fd.append('eid', dEid);
+    dOffSet.forEach(d  => fd.append('off[]',  d));
+    dCutiSet.forEach(d => fd.append('cuti[]', d));
+
+    /* Update local state */
+    OFF_DAYS[dEid]  = [...dOffSet];
+    CUTI_DAYS[dEid] = [...dCutiSet];
+    refreshOffBadge(dEid);
+
+    await fetch("{{ url_for('save_off', pk=period.period_key) }}", {method:'POST', body:fd});
+
+    /* Re-generate */
+    const r = await fetch("{{ url_for('generate', pk=period.period_key) }}", {method:'POST'});
+    const data = await r.json();
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i> Simpan & Re-generate';
+    closeDrawer();
+
+    if(data.success) {
+        gToast('Jadwal diperbarui!');
+        setTimeout(() => location.reload(), 900);
+    } else gToast('Gagal generate', false);
+}
+
+/* ── Export ── */
+let exportModalInstance = null;
+function openExportModal(fmt) {
+    document.getElementById('exportFormat').value = fmt;
+    if (!exportModalInstance) {
+        exportModalInstance = new bootstrap.Modal(document.getElementById('exportModal'));
+    }
+    exportModalInstance.show();
+}
+
+function doExport() {
+    const fmt = document.getElementById('exportFormat').value;
+    const bid = document.getElementById('exportBranch').value;
+    
+    let url = fmt === 'excel' 
+        ? "{{ url_for('export_excel', pk=period.period_key) }}" 
+        : "{{ url_for('export_pdf', pk=period.period_key) }}";
+        
+    if (bid) url += '?bid=' + bid;
+    
+    window.location.href = url;
+    exportModalInstance.hide();
+}
+
+/* ── Render day names in column headers ── */
+(function renderDayNames() {
+    const DAY_ID = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    // Color weekends differently
+    DATES.forEach(d => {
+        const th = document.getElementById('hdr-' + d);
+        if (!th) return;
+        const wd = new Date(d).getDay(); // 0=Sun,6=Sat
+        const span = th.querySelector('.day-name');
+        if (span) {
+            span.textContent = DAY_ID[wd];
+            if (wd === 0 || wd === 6) {
+                span.style.color = '#dc2626';   // merah untuk Sab/Min
+                th.style.background = '#fff5f5';
+            } else {
+                span.style.color = '#64748b';
+            }
+        }
+    });
+})();
+
+calculateDailyStats();
+</script>
+{% endblock %}

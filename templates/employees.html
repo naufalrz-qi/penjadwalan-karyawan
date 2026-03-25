@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+{% block title %}Pegawai — ShiftMaster Pro{% endblock %}
+
+{% block extra_head %}
+<style>
+.emp-avatar {
+    width:32px;height:32px;border-radius:50%;
+    background:linear-gradient(135deg,#818cf8,#4f46e5);
+    color:white;font-size:0.65rem;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 6px rgba(79,70,229,0.25);
+    transition:transform 0.2s ease;flex-shrink:0;
+}
+tr:hover .emp-avatar { transform:scale(1.12); }
+
+/* inline-edit cells */
+.editable {
+    cursor:pointer; border-radius:6px; padding:2px 6px;
+    transition:background 0.15s ease;
+    display:inline-block; min-width:40px;
+}
+.editable:hover { background:#f1f5f9; }
+.editable:focus {
+    outline:none; background:#eef2ff;
+    box-shadow:0 0 0 2px var(--primary);
+    border-radius:6px;
+}
+
+/* quick-add row */
+.qa-row td { background:#f8fafc !important; }
+.qa-input {
+    border:1.5px solid #e2e8f0; border-radius:8px;
+    padding:0.3rem 0.6rem; font-size:0.82rem; outline:none; width:100%;
+    transition:border-color 0.2s,box-shadow 0.2s;
+}
+.qa-input:focus { border-color:var(--primary); box-shadow:0 0 0 2px rgba(79,70,229,0.12); }
+.qa-select {
+    border:1.5px solid #e2e8f0; border-radius:8px;
+    padding:0.3rem 0.5rem; font-size:0.82rem; outline:none; width:100%;
+}
+
+/* search */
+#empSearch {
+    border:1.5px solid #e2e8f0; border-radius:12px;
+    padding:0.5rem 0.9rem 0.5rem 2.4rem; font-size:0.85rem; outline:none;
+    background:white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.398 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.867-3.833zm-5.242 1.156a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat 0.7rem center;
+    transition:border-color 0.2s,box-shadow 0.2s;
+    width:220px;
+}
+#empSearch:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+
+/* modal */
+.modal-content { border-radius:20px !important; border:none !important; }
+.modal-header { background:linear-gradient(135deg,#f8faff,#eef2ff); border-radius:20px 20px 0 0; border-bottom:1px solid #e0e7ff; }
+.modal.fade .modal-dialog { transform:translateY(24px) scale(0.97); transition:transform 0.3s cubic-bezier(0.22,1,0.36,1); }
+.modal.show .modal-dialog { transform:none; }
+.form-control,.form-select { border-radius:10px; border:1.5px solid #e2e8f0; transition:border-color 0.2s,box-shadow 0.2s; }
+.form-control:focus,.form-select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+
+/* gender badge */
+.badge-m { background:#dbeafe;color:#1e40af; }
+.badge-f { background:#fce7f3;color:#9d174d; }
+
+@keyframes rowIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+.emp-row { animation: rowIn 0.3s cubic-bezier(0.22,1,0.36,1) both; }
+
+.jd-header td { background:linear-gradient(90deg,#f1f5f9,#f8fafc) !important; border-left:3px solid var(--primary); font-size:0.7rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-800 mb-1" style="font-weight:800;letter-spacing:-0.5px;">Manajemen Pegawai</h1>
+            <p class="text-muted small mb-0">Klik nama/kolom untuk edit langsung</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text" id="empSearch" placeholder="Cari pegawai...">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#empModal">
+                <i class="bi bi-person-plus me-1"></i> Tambah
+            </button>
+        </div>
+    </div>
+
+    <!-- Tables per branch -->
+    {% for bid, data in by_branch.items() %}
+    <div class="card mb-4 border-0 shadow-sm" style="border-radius:16px !important;">
+        <div class="card-header bg-white py-3 px-4 d-flex align-items-center gap-2" style="border-radius:16px 16px 0 0 !important;">
+            <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#6366f1);color:white;display:flex;align-items:center;justify-content:center;font-size:0.85rem;">
+                <i class="bi bi-building"></i>
+            </div>
+            <span class="fw-bold text-dark">{{ data.branch.name }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4" style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;">Nama</th>
+                            <th style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;">Gender</th>
+                            <th style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;">Jobdesk</th>
+                            <th class="text-end pe-4" style="font-size:0.68rem;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for jd, emps in data.by_jobdesk.items() %}
+                        <tr class="jd-header">
+                            <td colspan="4" class="ps-4 py-2 fw-semibold">
+                                {{ jd|upper }}
+                                <span class="badge rounded-pill ms-1" style="background:rgba(79,70,229,0.1);color:var(--primary);font-size:0.65rem;">{{ emps|length }}</span>
+                            </td>
+                        </tr>
+                        {% for e in emps %}
+                        <tr class="emp-row" data-name="{{ e.name|lower }}" data-jd="{{ e.jobdesk|lower }}"
+                            style="animation-delay:{{ loop.index * 30 }}ms">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="emp-avatar">{{ e.name[:2]|upper }}</span>
+                                    <span class="editable fw-medium"
+                                          contenteditable="true"
+                                          data-eid="{{ e.id }}"
+                                          data-field="name"
+                                          onblur="saveInline(this)"
+                                          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ e.name }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill {% if e.gender=='P' %}badge-m{% else %}badge-f{% endif %}"
+                                      style="cursor:pointer;" title="Klik untuk ganti"
+                                      onclick="toggleGender(this,'{{ e.id }}','{{ e.gender }}')">
+                                    <i class="bi bi-gender-{% if e.gender=='P' %}male{% else %}female{% endif %} me-1"></i>{{ e.gender }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="editable text-muted small"
+                                      contenteditable="true"
+                                      data-eid="{{ e.id }}"
+                                      data-field="jobdesk"
+                                      onblur="saveInline(this)"
+                                      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ e.jobdesk }}</span>
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-link text-danger p-0"
+                                        onclick="deleteEmp('{{ e.id }}', '{{ e.name }}', this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endfor %}
+
+                        <!-- Quick-add row -->
+                        <tr class="qa-row" id="qa-{{ bid }}">
+                            <td class="ps-4 py-2">
+                                <input class="qa-input" placeholder="+ Nama pegawai baru..." id="qa-name-{{ bid }}"
+                                       onkeydown="if(event.key==='Enter')quickAdd('{{ bid }}')">
+                            </td>
+                            <td>
+                                <select class="qa-select" id="qa-gender-{{ bid }}">
+                                    <option value="P">Pria (P)</option>
+                                    <option value="W">Wanita (W)</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select class="qa-select" id="qa-jd-{{ bid }}">
+                                    {% for jd in data.branch.jobdesks %}
+                                    <option value="{{ jd }}">{{ jd }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-primary" onclick="quickAdd('{{ bid }}')">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Add modal -->
+<div class="modal fade" id="empModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="empModalTitle">Tambah Pegawai</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nama Lengkap</label>
+                    <input type="text" id="f_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Cabang</label>
+                    <select id="f_branch" class="form-select" required onchange="loadJd(this.value)">
+                        <option value="">Pilih Cabang...</option>
+                        {% for b in settings.branches %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Jobdesk</label>
+                    <select id="f_jobdesk" class="form-select" required>
+                        <option value="">Pilih cabang dulu...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Gender</label>
+                    <select id="f_gender" class="form-select">
+                        <option value="P">Pria (P)</option>
+                        <option value="W">Wanita (W)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" onclick="modalAdd()">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Inline save ── */
+async function saveInline(el) {
+    const eid   = el.dataset.eid;
+    const field = el.dataset.field;
+    const val   = el.textContent.trim();
+    if (!val) { el.textContent = el.dataset.orig || ''; return; }
+
+    try {
+        const r = await fetch(`/employees/inline/${eid}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({field, value:val})
+        });
+        if(r.ok) gToast(field==='name'?'Nama disimpan':'Jobdesk disimpan');
+        else { gToast('Gagal simpan',false); }
+    } catch { gToast('Gagal simpan',false); }
+}
+
+/* ── Toggle gender (cycle P↔W) ── */
+async function toggleGender(badge, eid, cur) {
+    const next = cur==='P'?'W':'P';
+    const r = await fetch(`/employees/inline/${eid}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({field:'gender', value:next})
+    });
+    if(r.ok) {
+        badge.className = 'badge rounded-pill ' + (next==='P'?'badge-m':'badge-f');
+        badge.innerHTML = `<i class="bi bi-gender-${next==='P'?'male':'female'} me-1"></i>${next}`;
+        badge.onclick = () => toggleGender(badge, eid, next);
+        gToast('Gender diperbarui');
+    }
+}
+
+/* ── Build a new employee <tr> from data ── */
+function buildEmpRow(emp) {
+    const isMale = emp.gender === 'P';
+    const initials = emp.name.slice(0,2).toUpperCase();
+    const tr = document.createElement('tr');
+    tr.className = 'emp-row';
+    tr.dataset.name = emp.name.toLowerCase();
+    tr.dataset.jd   = (emp.jobdesk || '').toLowerCase();
+    tr.innerHTML = `
+        <td class="ps-4">
+            <div class="d-flex align-items-center gap-2">
+                <span class="emp-avatar">${initials}</span>
+                <span class="editable fw-medium" contenteditable="true"
+                      data-eid="${emp.id}" data-field="name"
+                      onblur="saveInline(this)"
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+                >${emp.name}</span>
+            </div>
+        </td>
+        <td>
+            <span class="badge rounded-pill ${isMale?'badge-m':'badge-f'}"
+                  style="cursor:pointer;" title="Klik untuk ganti"
+                  onclick="toggleGender(this,'${emp.id}','${emp.gender}')">
+                <i class="bi bi-gender-${isMale?'male':'female'} me-1"></i>${emp.gender}
+            </span>
+        </td>
+        <td>
+            <span class="editable text-muted small" contenteditable="true"
+                  data-eid="${emp.id}" data-field="jobdesk"
+                  onblur="saveInline(this)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+            >${emp.jobdesk}</span>
+        </td>
+        <td class="text-end pe-4">
+            <button class="btn btn-sm btn-link text-danger p-0"
+                    onclick="deleteEmp('${emp.id}','${emp.name}',this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>`;
+    return tr;
+}
+
+/* ── Delete employee (CSR) ── */
+async function deleteEmp(eid, name, btn) {
+    if (!confirm(`Hapus ${name}?`)) return;
+    const r = await fetch(`/employees/delete/${eid}`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    if (r.ok) {
+        const tr = btn.closest('tr');
+        tr.style.transition = 'opacity 0.25s,transform 0.25s';
+        tr.style.opacity = '0';
+        tr.style.transform = 'translateX(12px)';
+        setTimeout(() => tr.remove(), 270);
+        gToast(name + ' dihapus');
+    } else {
+        gToast('Gagal hapus', false);
+    }
+}
+
+/* ── Modal add (CSR) ── */
+async function modalAdd() {
+    const name    = document.getElementById('f_name').value.trim();
+    const branch  = document.getElementById('f_branch').value;
+    const jobdesk = document.getElementById('f_jobdesk').value;
+    const gender  = document.getElementById('f_gender').value;
+    if (!name || !branch || !jobdesk) {
+        gToast('Lengkapi semua field', false); return;
+    }
+    const fd = new FormData();
+    fd.append('name', name); fd.append('branch', branch);
+    fd.append('jobdesk', jobdesk); fd.append('gender', gender);
+    const r = await fetch("{{ url_for('add_employee') }}", {
+        method: 'POST', body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const data = await r.json();
+    if (data.success) {
+        // Inject row ke tbody yang tepat (cari qa-row cabang yang sesuai)
+        const qaRow = document.getElementById('qa-' + branch);
+        if (qaRow) {
+            const newTr = buildEmpRow(data.employee);
+            qaRow.parentNode.insertBefore(newTr, qaRow);
+        }
+        bootstrap.Modal.getInstance(document.getElementById('empModal')).hide();
+        document.getElementById('f_name').value = '';
+        gToast(name + ' ditambahkan!');
+    } else {
+        gToast('Gagal tambah', false);
+    }
+}
+
+/* ── Quick-add row (CSR) ── */
+async function quickAdd(bid) {
+    const name   = document.getElementById('qa-name-'+bid).value.trim();
+    const gender = document.getElementById('qa-gender-'+bid).value;
+    const jd     = document.getElementById('qa-jd-'+bid).value;
+    if(!name) { document.getElementById('qa-name-'+bid).focus(); return; }
+
+    const fd = new FormData();
+    fd.append('name', name); fd.append('branch', bid);
+    fd.append('jobdesk', jd); fd.append('gender', gender);
+
+    const r = await fetch("{{ url_for('add_employee') }}", {
+        method:'POST', body:fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const data = await r.json();
+    if (data.success) {
+        const qaRow = document.getElementById('qa-'+bid);
+        const newTr = buildEmpRow(data.employee);
+        qaRow.parentNode.insertBefore(newTr, qaRow);
+        document.getElementById('qa-name-'+bid).value = '';
+        gToast(name + ' ditambahkan!');
+    } else {
+        gToast('Gagal tambah', false);
+    }
+}
+
+/* ── Search ── */
+document.getElementById('empSearch').addEventListener('input', function(){
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.emp-row').forEach(row=>{
+        row.style.display = (row.dataset.name.includes(q)||row.dataset.jd.includes(q)) ? '' : 'none';
+    });
+});
+
+/* ── Modal jobdesk loader ── */
+async function loadJd(bid) {
+    if(!bid) return;
+    const r = await fetch(`/api/branch/${bid}/jobdesks`);
+    const d = await r.json();
+    const sel = document.getElementById('f_jobdesk');
+    sel.innerHTML = d.jobdesks.map(j=>`<option value="${j}">${j}</option>`).join('');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ShiftMaster Pro{% endblock %}
+
+{% block extra_head %}
+<style>
+.dash-header { padding: 2rem 0 1.25rem; }
+.dash-header h1 { font-weight: 800; letter-spacing: -0.5px; }
+
+/* stat chips */
+.stat-chip {
+    background: white; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 0.75rem;
+    animation: chipIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    transition: box-shadow 0.2s ease;
+}
+.stat-chip:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.07); }
+@keyframes chipIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+.chip-icon { width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem; }
+.chip-val { font-weight:800; font-size:1.15rem; color:#0f172a; }
+.chip-lbl { font-size:0.7rem; color:#64748b; }
+
+/* schedule cards */
+@keyframes cardIn { from{opacity:0;transform:translateY(20px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+.sched-card {
+    animation: cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    border-radius: 18px !important; overflow:hidden;
+    transition: transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s ease;
+    cursor: pointer;
+}
+.sched-card:hover { transform: translateY(-5px) scale(1.01); box-shadow: 0 16px 36px rgba(79,70,229,0.12) !important; }
+.card-top-bar { height:4px; background: linear-gradient(90deg,#4f46e5,#818cf8); }
+.card-top-bar.done { background: linear-gradient(90deg,#10b981,#34d399); }
+.status-pill {
+    font-size:0.68rem; font-weight:600; padding:0.28em 0.7em; border-radius:20px;
+}
+.pill-done { background:#dcfce7; color:#166534; }
+.pill-draft { background:#f1f5f9; color:#475569; }
+.month-icon {
+    width:40px;height:40px;border-radius:12px;
+    background: linear-gradient(135deg,#eef2ff,#e0e7ff);
+    color:var(--primary); display:flex;align-items:center;justify-content:center;
+    font-size:1.1rem; transition: transform 0.2s ease;
+}
+.sched-card:hover .month-icon { transform: rotate(-8deg) scale(1.1); }
+.card-footer { background:#f8fafc !important; border-top:1px solid #f1f5f9 !important; }
+.btn-view { border-radius:10px; font-size:0.82rem; font-weight:600; width:100%; }
+
+/* create button */
+.btn-create {
+    background: linear-gradient(135deg,#4f46e5,#6366f1);
+    color:white; border:none; border-radius:12px; font-weight:600;
+    padding:0.6rem 1.3rem;
+    box-shadow: 0 4px 14px rgba(79,70,229,0.3);
+    transition: all 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.btn-create:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(79,70,229,0.4); color:white; }
+
+/* modal */
+.modal-content { border-radius:20px !important; border:none !important; box-shadow:0 24px 48px rgba(0,0,0,0.18) !important; }
+.modal-header { background:linear-gradient(135deg,#f8faff,#eef2ff); border-bottom:1px solid #e0e7ff; border-radius:20px 20px 0 0; }
+.modal.fade .modal-dialog { transform:translateY(28px) scale(0.97); transition:transform 0.3s cubic-bezier(0.22,1,0.36,1); }
+.modal.show .modal-dialog { transform:translateY(0) scale(1); }
+
+/* month grid */
+.month-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.5rem; }
+.month-btn {
+    padding:0.6rem 0.25rem; border-radius:12px; border:2px solid #f1f5f9;
+    background:white; font-size:0.8rem; font-weight:600; color:#475569;
+    cursor:pointer; text-align:center;
+    transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
+}
+.month-btn:hover { border-color:#c7d2fe; color:var(--primary); background:#f5f3ff; }
+.month-btn.active {
+    background:linear-gradient(135deg,#4f46e5,#6366f1); border-color:#4f46e5;
+    color:white; box-shadow:0 4px 12px rgba(79,70,229,0.3);
+}
+
+/* empty */
+.empty-dash { text-align:center; padding:4rem 2rem; }
+.empty-icon { width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);color:var(--primary);font-size:2rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <!-- Header -->
+    <div class="dash-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h1 class="h3 mb-1">Dashboard</h1>
+            <p class="text-muted small mb-0">Kelola jadwal shift bulanan</p>
+        </div>
+        <button class="btn btn-create" data-bs-toggle="modal" data-bs-target="#createModal">
+            <i class="bi bi-plus-lg me-1"></i> Buat Jadwal Baru
+        </button>
+    </div>
+
+    <!-- Stats -->
+    {% set total = schedules|length %}
+    {% set done  = schedules|selectattr('generated')|list|length %}
+    <div class="d-flex gap-3 flex-wrap mb-4">
+        <div class="stat-chip" style="animation-delay:0ms">
+            <div class="chip-icon" style="background:#eef2ff;color:#4f46e5;"><i class="bi bi-calendar3"></i></div>
+            <div><div class="chip-val">{{ total }}</div><div class="chip-lbl">Total Jadwal</div></div>
+        </div>
+        <div class="stat-chip" style="animation-delay:70ms">
+            <div class="chip-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-check2-circle"></i></div>
+            <div><div class="chip-val">{{ done }}</div><div class="chip-lbl">Sudah Generate</div></div>
+        </div>
+        <div class="stat-chip" style="animation-delay:140ms">
+            <div class="chip-icon" style="background:#f1f5f9;color:#64748b;"><i class="bi bi-file-text"></i></div>
+            <div><div class="chip-val">{{ total - done }}</div><div class="chip-lbl">Draft</div></div>
+        </div>
+    </div>
+
+    <!-- Schedule Cards -->
+    <div class="row g-3">
+        {% for s in schedules %}
+        <div class="col-sm-6 col-md-4 col-lg-3">
+            <div class="card sched-card h-100 shadow-sm border-0" style="animation-delay:{{ loop.index0 * 65 }}ms"
+                 onclick="window.location='{{ url_for('schedule_view', pk=s.key) }}'">
+                <div class="card-top-bar {% if s.generated %}done{% endif %}"></div>
+                <div class="card-body pb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <span class="status-pill {% if s.generated %}pill-done{% else %}pill-draft{% endif %}">
+                            <i class="bi bi-{% if s.generated %}check-circle{% else %}pencil{% endif %} me-1"></i>
+                            {{ 'Sudah Generate' if s.generated else 'Draft' }}
+                        </span>
+                        <form action="{{ url_for('delete_schedule', pk=s.key) }}" method="POST"
+                              onsubmit="return confirm('Hapus jadwal {{ s.label }}?')" onclick="event.stopPropagation()">
+                            <button class="btn btn-sm btn-link text-danger p-0" style="font-size:0.8rem;">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="month-icon"><i class="bi bi-calendar-event"></i></div>
+                        <div>
+                            <div class="fw-bold">{{ s.label }}</div>
+                            <div class="text-muted small">Periode: 26 s/d 25</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer px-3 pb-3 pt-2" onclick="event.stopPropagation()">
+                    <a href="{{ url_for('schedule_view', pk=s.key) }}" class="btn btn-view {% if s.generated %}btn-outline-primary{% else %}btn-primary{% endif %}">
+                        <i class="bi bi-{% if s.generated %}eye{% else %}magic{% endif %} me-1"></i>
+                        {{ 'Lihat Jadwal' if s.generated else 'Atur & Generate' }}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="empty-dash">
+                <div class="empty-icon"><i class="bi bi-calendar-x"></i></div>
+                <h5 class="fw-bold">Belum ada jadwal</h5>
+                <p class="text-muted mb-4">Mulai dengan membuat jadwal shift untuk bulan ini.</p>
+                <button class="btn btn-create" data-bs-toggle="modal" data-bs-target="#createModal">
+                    <i class="bi bi-plus-lg me-1"></i> Buat Jadwal Pertama
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Create Modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);color:var(--primary);display:flex;align-items:center;justify-content:center;">
+                        <i class="bi bi-calendar-plus"></i>
+                    </div>
+                    <h5 class="modal-title fw-bold mb-0">Buat Jadwal Baru</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('new_schedule') }}" method="POST">
+                <div class="modal-body pt-1">
+                    <!-- Year toggle -->
+                    <div class="d-flex gap-2 mb-4 justify-content-center">
+                        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:50px;padding:3px;display:inline-flex;">
+                            <input type="radio" class="btn-check" name="year" id="y1" value="{{ today.year }}" checked>
+                            <label class="btn btn-sm border-0 rounded-pill px-3 fw-600" for="y1" style="font-weight:600;">{{ today.year }}</label>
+                            <input type="radio" class="btn-check" name="year" id="y2" value="{{ today.year + 1 }}">
+                            <label class="btn btn-sm border-0 rounded-pill px-3" for="y2" style="font-weight:600;">{{ today.year + 1 }}</label>
+                        </div>
+                    </div>
+
+                    <!-- Month grid -->
+                    <input type="hidden" name="month" id="selMonth" value="{{ today.month }}">
+                    <div class="month-grid">
+                        {% for m in month_names %}
+                        <div class="month-btn {% if loop.index == today.month %}active{% endif %}"
+                             onclick="pickMonth({{ loop.index }}, this)">{{ m[:3] }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-2">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-magic me-1"></i> Buat & Generate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function pickMonth(m, el) {
+    document.getElementById('selMonth').value = m;
+    document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+}
+document.querySelectorAll('.btn-check').forEach(r => {
+    r.addEventListener('change', function(){
+        const lbl = document.querySelector(`label[for="${this.id}"]`);
+        document.querySelectorAll('.btn-sm.border-0.rounded-pill').forEach(l => l.classList.remove('btn-primary','text-white'));
+        lbl.classList.add('btn-primary','text-white');
+    });
+});
+</script>
+{% endblock %}
