@@ -50,7 +50,7 @@
 .mini-cal th { font-size:0.65rem; text-align:center; color:#94a3b8; padding:0.25rem; font-weight:600; }
 .mini-cal td { padding:0.2rem; text-align:center; }
 .cal-day {
-    width:36px; height:36px; border-radius:8px;
+    width:44px; height:44px; border-radius:8px;
     display:inline-flex; align-items:center; justify-content:center;
     font-size:0.78rem; font-weight:600; cursor:pointer;
     border:2px solid transparent; transition: all 0.18s cubic-bezier(0.22,1,0.36,1); user-select:none;
@@ -101,10 +101,12 @@
     <div class="alert alert-light border d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 py-2 px-3" style="border-radius:12px !important;font-size:0.82rem;">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-info-circle text-primary"></i>
-            <span><strong>Tips:</strong> Klik tanggal untuk set libur seharian. Klik nama untuk atur pola mingguan bulanan.</span>
+            <span><strong>Tips:</strong> Klik sel untuk set shift/libur. Klik nama untuk atur pola bulanan. Klik tanggal untuk set libur seharian.</span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-sm btn-light border" onclick="toggleMode('normal')" id="btnNormal" style="background:#f8fafc;font-weight:600;"><i class="bi bi-cursor me-1"></i>Pilih</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_pagi')" id="btnKuasPagi" style="color:#d97706;"><i class="bi bi-brush me-1"></i>Pagi</button>
+            <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_siang')" id="btnKuasSiang" style="color:#1d4ed8;"><i class="bi bi-brush me-1"></i>Siang</button>
             <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_off')" id="btnKuasOff" style="color:#dc2626;"><i class="bi bi-brush me-1"></i>OFF</button>
             <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_cuti')" id="btnKuasCuti" style="color:#16a34a;"><i class="bi bi-brush me-1"></i>Cuti</button>
             <button class="btn btn-sm btn-light border" onclick="toggleMode('kuas_hapus')" id="btnKuasHapus" style="color:#64748b;"><i class="bi bi-eraser me-1"></i>Hapus</button>
@@ -119,7 +121,7 @@
                     <tr>
                         <th class="sticky-col py-3 ps-3" style="min-width: 15rem;">Pegawai</th>
                         {% for d in period.dates %}
-                        <th class="text-center col-date" style="min-width:38px; cursor:pointer; transition:background 0.2s;" title="Set libur seharian" onclick="setColumnOff('{{ d }}')">
+                        <th class="text-center col-date" style="min-width:44px; cursor:pointer; transition:background 0.2s;" title="Set libur seharian" onclick="setColumnOff('{{ d }}')">
                             {{ d[8:] }}<br><span class="opacity-50" style="font-size:0.55rem;">{{ d[5:7] }}</span>
                         </th>
                         {% endfor %}
@@ -155,8 +157,8 @@
                             style="border-color:#f8fafc!important;"
                             onmousedown="cellInteract('{{ e.id }}','{{ d }}',this, event)" 
                             onmouseenter="cellDrag('{{ e.id }}','{{ d }}',this, event)" title="{{ d }}">
-                            <div class="shift-badge w-100 h-100 {% if st=='OFF' %}bg-off{% elif st=='CUTI' %}bg-cuti{% endif %}" style="height:32px!important;border-radius:2px;">
-                                {{ 'OFF' if st=='OFF' else 'CT' if st=='CUTI' else '' }}
+                            <div class="shift-badge w-100 h-100 {% if st=='PAGI' %}bg-pagi{% elif st=='SIANG' %}bg-siang{% elif st=='OFF' %}bg-off{% elif st=='CUTI' %}bg-cuti{% endif %}" style="height:32px!important;border-radius:2px;">
+                                {{ 'P' if st=='PAGI' else 'S' if st=='SIANG' else 'OFF' if st=='OFF' else 'CT' if st=='CUTI' else '' }}
                             </div>
                         </td>
                         {% endfor %}
@@ -193,6 +195,8 @@
 
 {% block modals %}
 <div id="shiftPicker" class="shadow-lg border" style="display:none; position:absolute; z-index:1100; background:white; border-radius:12px; padding:0.4rem; gap:0.3rem;">
+    <button class="sp-btn bg-pagi" onclick="pickShift('PAGI')">P</button>
+    <button class="sp-btn bg-siang" onclick="pickShift('SIANG')">S</button>
     <button class="sp-btn bg-off" onclick="pickShift('OFF')">OFF</button>
     <button class="sp-btn bg-cuti" onclick="pickShift('CUTI')">CT</button>
     <button class="sp-btn bg-light text-muted" onclick="pickShift('')"><i class="bi bi-x-lg"></i></button>
@@ -255,8 +259,8 @@
 {% block extra_js %}
 <script>
 // @ts-nocheck
-const LABELS  = {'':'','OFF':'OFF','CUTI':'CT'};
-const CLASSES = {'':'','OFF':'bg-off','CUTI':'bg-cuti'};
+const LABELS  = {'':'','PAGI':'P','SIANG':'S','OFF':'OFF','CUTI':'CT'};
+const CLASSES = {'':'','PAGI':'bg-pagi','SIANG':'bg-siang','OFF':'bg-off','CUTI':'bg-cuti'};
 
 const DATES   = JSON.parse('{{ period.dates | tojson | safe }}');
 const SCHED   = JSON.parse('{{ period.schedule | default({}) | tojson | safe }}');
@@ -291,6 +295,10 @@ function refreshOffBadge(eid) {
 function toggleMode(mode) {
     paintMode = mode;
     document.getElementById('btnNormal').style.background = mode === 'normal' ? '#f8fafc' : 'white';
+    const btnPagi = document.getElementById('btnKuasPagi');
+    const btnSiang = document.getElementById('btnKuasSiang');
+    if (btnPagi) btnPagi.style.background = mode === 'kuas_pagi' ? '#fef3c7' : 'white';
+    if (btnSiang) btnSiang.style.background = mode === 'kuas_siang' ? '#dbeafe' : 'white';
     document.getElementById('btnKuasOff').style.background = mode === 'kuas_off' ? '#fee2e2' : 'white';
     document.getElementById('btnKuasCuti').style.background = mode === 'kuas_cuti' ? '#dcfce7' : 'white';
     document.getElementById('btnKuasHapus').style.background = mode === 'kuas_hapus' ? '#f1f5f9' : 'white';
@@ -339,18 +347,24 @@ function pickShift(shiftVal) {
 
 function applyPaint(eid, date, td) {
     let shiftVal = '';
-    if (paintMode === 'kuas_off') shiftVal = 'OFF';
+    if (paintMode === 'kuas_pagi') shiftVal = 'PAGI';
+    else if (paintMode === 'kuas_siang') shiftVal = 'SIANG';
+    else if (paintMode === 'kuas_off') shiftVal = 'OFF';
     else if (paintMode === 'kuas_cuti') shiftVal = 'CUTI';
     else if (paintMode === 'kuas_hapus') shiftVal = '';
     
     const curBadge = td.querySelector('.shift-badge');
-    const isCurrentlyOff = curBadge.classList.contains('bg-off');
-    const isCurrentlyCuti = curBadge.classList.contains('bg-cuti');
-    const isCurrentlyEmpty = !(isCurrentlyOff || isCurrentlyCuti);
+    const isCurrentlyPagi  = curBadge.classList.contains('bg-pagi');
+    const isCurrentlySiang = curBadge.classList.contains('bg-siang');
+    const isCurrentlyOff   = curBadge.classList.contains('bg-off');
+    const isCurrentlyCuti  = curBadge.classList.contains('bg-cuti');
+    const isCurrentlyEmpty = !(isCurrentlyPagi || isCurrentlySiang || isCurrentlyOff || isCurrentlyCuti);
     
-    if (shiftVal === 'OFF' && isCurrentlyOff) return;
-    if (shiftVal === 'CUTI' && isCurrentlyCuti) return;
-    if (shiftVal === '' && isCurrentlyEmpty) return;
+    if (shiftVal === 'PAGI'  && isCurrentlyPagi)  return;
+    if (shiftVal === 'SIANG' && isCurrentlySiang) return;
+    if (shiftVal === 'OFF'   && isCurrentlyOff)   return;
+    if (shiftVal === 'CUTI'  && isCurrentlyCuti)  return;
+    if (shiftVal === ''      && isCurrentlyEmpty) return;
 
     updateShiftCell(eid, date, td, shiftVal);
 }

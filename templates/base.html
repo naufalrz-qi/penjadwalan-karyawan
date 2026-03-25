@@ -120,7 +120,7 @@
 
         /* ── Shift badges ── */
         .shift-cell {
-            width: 36px; height: 36px; padding: 0 !important;
+            width: 44px; height: 44px; padding: 0 !important;
             cursor: pointer; border: 1px solid #f1f5f9 !important;
             transition: transform 0.18s cubic-bezier(0.22,1,0.36,1);
         }
@@ -151,6 +151,15 @@
         }
         #gToast.show { transform:translateY(0); opacity:1; }
         #gToast.err  { background:#991b1b; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -162,7 +171,7 @@
             <div class="brand-icon"><i class="bi bi-calendar-event-fill"></i></div>
             ShiftMaster<span class="text-dark fw-normal">Pro</span>
         </a>
-        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Buka Navigasi Utama">
             <i class="bi bi-list fs-5"></i>
         </button>
         <div class="collapse navbar-collapse" id="nav">

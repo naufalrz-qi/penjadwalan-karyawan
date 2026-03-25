@@ -1,0 +1,107 @@
+[
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000001",
+    "name": "Arik",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "SPV",
+    "gender": "P"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000002",
+    "name": "Dian",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "KASIR",
+    "gender": "W"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000003",
+    "name": "Tiwi",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "KASIR",
+    "gender": "W"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000004",
+    "name": "Ramba",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "PRAMUNIAGA",
+    "gender": "W"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000005",
+    "name": "Azzin",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "PRAMUNIAGA",
+    "gender": "P"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000006",
+    "name": "Toyyib",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "PRAMUNIAGA",
+    "gender": "P"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000007",
+    "name": "Nyoman",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "PRAMUNIAGA",
+    "gender": "P"
+  },
+  {
+    "id": "b1c1a1f0-1a01-4c01-9001-000000000008",
+    "name": "Johan",
+    "branch": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+    "jobdesk": "PRAMUNIAGA",
+    "gender": "P"
+  },
+  {
+    "id": "1922b51f-dc19-480b-a55d-dc120a2020ed",
+    "name": "Bu Lega",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "W"
+  },
+  {
+    "id": "8d7e6af5-c339-40ed-bb17-379cc638b7b1",
+    "name": "NURAINI",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "W"
+  },
+  {
+    "id": "7d0d6b76-9af8-4015-842d-805462002262",
+    "name": "KADEK",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "W"
+  },
+  {
+    "id": "d8943355-580e-4ae9-8708-6649bf858764",
+    "name": "KETUT KARIANI",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "W"
+  },
+  {
+    "id": "ec24de47-6e16-42c3-add7-9b802ed425c2",
+    "name": "SANTALIA",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "W"
+  },
+  {
+    "id": "2930c50f-731f-461a-ba78-4e47c9736c01",
+    "name": "HAYYAN",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "SPV",
+    "gender": "P"
+  },
+  {
+    "id": "61685958-c3a6-40b3-a00b-7218930e1eca",
+    "name": "SOPWATI",
+    "branch": "e88452b2-eebb-459b-8819-47615df1996b",
+    "jobdesk": "CS",
+    "gender": "W"
+  }
+]

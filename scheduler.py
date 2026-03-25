@@ -12,6 +12,7 @@ Aturan penjadwalan:
 
 import random
 from datetime import date, timedelta
+import time # Import time for seeding
 
 OPPOSITE = {'PAGI': 'SIANG', 'SIANG': 'PAGI'}
 
@@ -70,7 +71,14 @@ def generate_schedule(period_data, employees):
       - Staggering fase awal antar pegawai agar tidak semua ganti shift bareng.
       - Daily 40% PAGI dan 60% SIANG per (cabang, jobdesk) dipastikan per gender.
       - After-OFF/CUTI: otomatis flip shift.
+      - Proper random seed using current time for varied results.
+      - Block lengths of 2-4 always, min 1 only adjacent to OFF/CUTI.
+      - Bypass jobdesk rules when only 1 person in jobdesk.
+      - Respect pre-existing PAGI/SIANG entries from setup.
     """
+    # Seed the random number generator with current time for varied results
+    random.seed(time.time())
+
     all_dates = period_data['dates']
     off_map   = {k: set(v) for k, v in period_data.get('off_days',  {}).items()}
     cuti_map  = {k: set(v) for k, v in period_data.get('cuti_days', {}).items()}
@@ -87,12 +95,17 @@ def generate_schedule(period_data, employees):
 
     schedule = {emp['id']: {} for emp in employees}
 
-    # Tulis status tetap (OFF/CUTI) langsung
+    # Tulis status tetap (OFF/CUTI) dan pre-existing PAGI/SIANG langsung
     for emp in employees:
         eid = emp['id']
         for d in all_dates:
             if fixed[eid][d] is not None:
                 schedule[eid][d] = fixed[eid][d]
+            elif eid in period_data.get('schedule', {}) and d in period_data['schedule'][eid]:
+                # Respect pre-existing PAGI/SIANG entries
+                pre_existing_shift = period_data['schedule'][eid][d]
+                if pre_existing_shift in ('PAGI', 'SIANG'):
+                    schedule[eid][d] = pre_existing_shift
 
     # Kelompokkan per (cabang, jobdesk)
     by_bjd = {}
@@ -102,11 +115,11 @@ def generate_schedule(period_data, employees):
 
     # Total hari kerja per pegawai (untuk personal balance)
     total_work = {
-        emp['id']: sum(1 for d in all_dates if fixed[emp['id']][d] is None)
+        emp['id']: sum(1 for d in all_dates if fixed[emp['id']][d] is None and schedule[emp['id']].get(d) not in ('PAGI', 'SIANG'))
         for emp in employees
     }
-    emp_pagi  = {emp['id']: 0 for emp in employees}
-    emp_siang = {emp['id']: 0 for emp in employees}
+    emp_pagi  = {emp['id']: sum(1 for s in schedule[emp['id']].values() if s == 'PAGI') for emp in employees}
+    emp_siang = {emp['id']: sum(1 for s in schedule[emp['id']].values() if s == 'SIANG') for emp in employees}
 
     # ── Inisialisasi state streak per pegawai ─────────────────────────────────
     #
@@ -126,11 +139,24 @@ def generate_schedule(period_data, employees):
             target = round(len(group) * 0.4)
             for idx, emp in enumerate(group):
                 eid         = emp['id']
-                rng         = random.Random(eid)
-                start_shift = 'PAGI' if idx < target else 'SIANG'
-                phase_used  = idx % 4
+                rng         = random.Random(eid) # Use employee ID as seed for consistent "random" streaks
+                
+                # If there's a pre-existing shift on the first day, use that as start_shift
+                first_working_day_shift = None
+                for d in all_dates:
+                    if fixed[eid][d] is None and schedule[eid].get(d) in ('PAGI', 'SIANG'):
+                        first_working_day_shift = schedule[eid][d]
+                        break
+
+                if first_working_day_shift:
+                    start_shift = first_working_day_shift
+                else:
+                    start_shift = 'PAGI' if idx < target else 'SIANG'
+                
+                phase_used  = idx % 4 # Staggering
                 block_len   = rng.randint(2, 4)
                 remaining   = max(0, block_len - phase_used)
+                
                 emp_state[eid] = {
                     'shift':     start_shift,
                     'remaining': remaining,
@@ -143,13 +169,33 @@ def generate_schedule(period_data, employees):
     # ── Penugasan hari per hari ───────────────────────────────────────────────
     for d_idx, d in enumerate(all_dates):
         for (branch, jd), emps in by_bjd.items():
-            working = [e for e in emps if fixed[e['id']][d] is None]
+            # Filter employees who are not OFF/CUTI and don't have a pre-existing shift for today
+            working = [e for e in emps if fixed[e['id']][d] is None and schedule[e['id']].get(d) not in ('PAGI', 'SIANG')]
+            
             if not working:
                 continue
 
             working_m = [e for e in working if e['gender'] == 'P']
             working_w = [e for e in working if e['gender'] == 'W']
             
+            # Bypass jobdesk rules if only 1 person in jobdesk group
+            if len(emps) == 1:
+                # Assign the single person to PAGI or SIANG based on personal balance
+                emp = emps[0]
+                eid = emp['id']
+                if fixed[eid][d] is None and schedule[eid].get(d) not in ('PAGI', 'SIANG'):
+                    # Prioritize PAGI if personal balance is low, otherwise SIANG
+                    if emp_pagi[eid] / (emp_pagi[eid] + emp_siang[eid] + 1) < 0.4: # +1 to avoid division by zero
+                        sh = 'PAGI'
+                    else:
+                        sh = 'SIANG'
+                    schedule[eid][d] = sh
+                    if sh == 'PAGI':
+                        emp_pagi[eid] += 1
+                    else:
+                        emp_siang[eid] += 1
+                continue # Skip normal processing for this group
+
             target_pagi_m = round(len(working_m) * 0.4)
             target_pagi_w = round(len(working_w) * 0.4)
 
@@ -172,13 +218,16 @@ def generate_schedule(period_data, employees):
                     ls = _last_shift(schedule, eid, all_dates, d_idx)
                     if ls:
                         new_sh = OPPOSITE[ls]
-                        # Mulai blok baru dengan 2-4 hari (inklusif hari ini)
+                        # Mulai blok baru dengan 1-4 hari (inklusif hari ini)
+                        # Block length can be 1 if adjacent to OFF/CUTI
                         state.update({
                             'shift':     new_sh,
-                            'remaining': state['rng'].randint(2, 4),
+                            'remaining': state['rng'].randint(1, 4), # Min 1 day block
                         })
                         forced[eid] = new_sh
                     else:
+                        # If no last shift found (e.g., first working day after a long OFF/CUTI block at start of period)
+                        # Treat as free to assign
                         if is_m: free_m.append(emp)
                         else: free_w.append(emp)
                     continue
@@ -202,6 +251,7 @@ def generate_schedule(period_data, employees):
                         forced[_eid] = 'SIANG'
                         emp_state[_eid]['shift'] = 'SIANG'
                         # Mulai hitungan block SIANG baru yang sedikit lebih pendek
+                        # Block length can be 1 if forced to change due to cap
                         emp_state[_eid]['remaining'] = max(1, emp_state[_eid]['rng'].randint(2, 4) - 1)
             
             enforce_cap(working_m, target_pagi_m)
@@ -249,7 +299,7 @@ def generate_schedule(period_data, employees):
                 state = emp_state[eid]
                 schedule[eid][d]   = sh
                 state['shift']     = sh
-                state['remaining'] = state['rng'].randint(1, 3)
+                state['remaining'] = state['rng'].randint(2, 4) # Normal block length 2-4
                 if sh == 'PAGI':
                     emp_pagi[eid]  += 1
                 else:
@@ -262,7 +312,7 @@ def generate_schedule(period_data, employees):
                 state = emp_state[eid]
                 schedule[eid][d]   = sh
                 state['shift']     = sh
-                state['remaining'] = state['rng'].randint(1, 3)
+                state['remaining'] = state['rng'].randint(2, 4) # Normal block length 2-4
                 if sh == 'PAGI':
                     emp_pagi[eid]  += 1
                 else:
@@ -270,6 +320,8 @@ def generate_schedule(period_data, employees):
 
     # ── Safety pass: pastikan after-OFF rule tidak dilanggar ─────────────────
     schedule = _enforce_after_off(schedule, fixed, employees, all_dates)
+    # ── Final pass: pastikan tidak ada streak lebih dari 4 hari ──────────────
+    schedule = _fix_long_streaks(schedule, fixed, employees, all_dates)
     return schedule
 
 
@@ -347,5 +399,47 @@ def _enforce_after_off(schedule, fixed, employees, all_dates):
                     continue
 
             schedule[eid][d] = want
+
+    return schedule
+
+
+def _fix_long_streaks(schedule, fixed, employees, all_dates):
+    """
+    Pass terakhir mutlak: scan setiap pegawai dan pastikan tidak ada
+    streak PAGI atau SIANG yang lebih dari 4 hari kerja berturut-turut.
+
+    Algoritma:
+    1. Bangun daftar indeks 'hari kerja' (tidak OFF/CUTI) per pegawai.
+    2. Iterasi dengan sliding window; jika streak saat posisi ke-5
+       masih sama dengan hari 1-4, flip ke OPPOSITE.
+    3. Flip hanya terjadi pada PAGI/SIANG — tidak menyentuh OFF/CUTI.
+    """
+    for emp in employees:
+        eid = emp['id']
+        # Kumpulkan indeks hari kerja (bukan OFF/CUTI)
+        work_indices = [
+            i for i, d in enumerate(all_dates)
+            if fixed[eid][d] is None and schedule[eid].get(d) in ('PAGI', 'SIANG')
+        ]
+
+        streak_shift = None
+        streak_len   = 0
+
+        for wi in work_indices:
+            d  = all_dates[wi]
+            st = schedule[eid][d]  # 'PAGI' or 'SIANG'
+
+            if st == streak_shift:
+                streak_len += 1
+            else:
+                streak_shift = st
+                streak_len   = 1
+
+            if streak_len > 4:
+                # Flip ke OPPOSITE dan reset streak
+                new_sh = OPPOSITE[st]
+                schedule[eid][d] = new_sh
+                streak_shift = new_sh
+                streak_len   = 1
 
     return schedule

@@ -78,6 +78,11 @@
 /* empty */
 .empty-dash { text-align:center; padding:4rem 2rem; }
 .empty-icon { width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);color:var(--primary);font-size:2rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem; }
+
+.month-btn:focus-visible, .btn-check:focus-visible + label {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+}
 </style>
 {% endblock %}
 
@@ -112,12 +117,36 @@
         </div>
     </div>
 
+    <!-- Analytics Dashboard -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100" style="border-radius:18px;">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-people text-primary me-2"></i>Demografi Pegawai</h6>
+                    <div style="height:220px; position:relative;">
+                        <canvas id="genderChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100" style="border-radius:18px;">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-pie-chart text-success me-2"></i>Distribusi Shift (Keseluruhan)</h6>
+                    <div style="height:220px; position:relative;">
+                        <canvas id="shiftChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Schedule Cards -->
     <div class="row g-3">
         {% for s in schedules %}
         <div class="col-sm-6 col-md-4 col-lg-3">
-            <div class="card sched-card h-100 shadow-sm border-0" {{ ('style="animation-delay:' ~ (loop.index0 * 65) ~ 'ms;"') | safe }}
-                 onclick="window.location='{{ url_for('schedule_setup', pk=s.key) if not s.generated else url_for('schedule_view', pk=s.key) }}'">
+            <div class="card sched-card h-100 shadow-sm border-0 position-relative" {{ ('style="animation-delay:' ~ (loop.index0 * 65) ~ 'ms;"') | safe }}>
+                <a href="{{ url_for('schedule_setup', pk=s.key) if not s.generated else url_for('schedule_view', pk=s.key) }}" class="stretched-link" aria-label="Buka manajer jadwal untuk {{ s.label }}"></a>
                 <div class="card-top-bar {% if s.generated %}done{% endif %}"></div>
                 <div class="card-body pb-2">
                     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -125,7 +154,7 @@
                             <i class="bi bi-{% if s.generated %}check-circle{% else %}pencil{% endif %} me-1"></i>
                             {{ 'Sudah Generate' if s.generated else 'Draft' }}
                         </span>
-                        <button class="btn btn-sm btn-link text-danger p-0" style="font-size:0.8rem;"
+                        <button class="btn btn-sm btn-link text-danger position-relative p-0" style="font-size:1.1rem; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; z-index:2;" aria-label="Hapus Jadwal {{ s.label }}"
                                 onclick="event.stopPropagation(); deleteSchedule('{{ s.key }}', '{{ s.label }}', this)">
                             <i class="bi bi-trash"></i>
                         </button>
@@ -140,7 +169,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer px-3 pb-3 pt-2" onclick="event.stopPropagation()">
+                <div class="card-footer px-3 pb-3 pt-2 position-relative" style="z-index: 2;" onclick="event.stopPropagation()">
                     <a href="{{ url_for('schedule_setup', pk=s.key) if not s.generated else url_for('schedule_view', pk=s.key) }}"
                        class="btn btn-view {% if s.generated %}btn-outline-primary{% else %}btn-primary{% endif %}">
                         <i class="bi bi-{% if s.generated %}eye{% else %}sliders{% endif %} me-1"></i>
@@ -177,7 +206,7 @@
                     </div>
                     <h5 class="modal-title fw-bold mb-0">Buat Jadwal Baru</h5>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup form Buat Jadwal"></button>
             </div>
             <form action="{{ url_for('new_schedule') }}" method="POST">
                 <div class="modal-body pt-1">
@@ -205,8 +234,8 @@
                     <input type="hidden" name="month" id="selMonth" value="{{ today.month }}">
                     <div class="month-grid">
                         {% for m in month_names %}
-                        <div class="month-btn {% if loop.index == today.month %}active{% endif %}"
-                             onclick="pickMonth({{ loop.index }}, this)">{{ m[:3] }}</div>
+                        <button type="button" class="month-btn {% if loop.index == today.month %}active{% endif %}"
+                             data-month="{{ loop.index }}" onclick="pickMonth(this)">{{ m[:3] }}</button>
                         {% endfor %}
                     </div>
                 </div>
@@ -223,9 +252,75 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-function pickMonth(m, el) {
-    document.getElementById('selMonth').value = m;
+document.addEventListener('DOMContentLoaded', function() {
+    // Parse JSON directly to avoid JS syntax linter errors
+    const rawStats = JSON.parse('{{ stats | tojson | safe }}');
+    const genderData = rawStats.gender || { P: 0, W: 0 };
+    const shiftData  = rawStats.shifts || { PAGI: 0, SIANG: 0, OFF: 0, CUTI: 0 };
+
+    // Common Chart Options
+    Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+    Chart.defaults.color = '#64748b';
+    const sharedOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { weight: '600' } } }
+        }
+    };
+
+    // 1. Gender Pie Chart
+    const ctxGender = document.getElementById('genderChart').getContext('2d');
+    new Chart(ctxGender, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pria', 'Wanita'],
+            datasets: [{
+                data: [genderData.P, genderData.W],
+                backgroundColor: ['#4f46e5', '#ec4899'],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            ...sharedOptions,
+            cutout: '65%'
+        }
+    });
+
+    // 2. Shift Bar Chart
+    const ctxShift = document.getElementById('shiftChart').getContext('2d');
+    new Chart(ctxShift, {
+        type: 'bar',
+        data: {
+            labels: ['PAGI', 'SIANG', 'OFF', 'CUTI'],
+            datasets: [{
+                label: 'Jumlah Shift',
+                data: [shiftData.PAGI, shiftData.SIANG, shiftData.OFF, shiftData.CUTI],
+                backgroundColor: ['#fef08a', '#bfdbfe', '#fecaca', '#bbf7d0'],
+                borderColor: ['#facc15', '#60a5fa', '#f87171', '#4ade80'],
+                borderWidth: 1,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { borderDash: [4, 4], drawBorder: false } },
+                x: { grid: { display: false, drawBorder: false } }
+            }
+        }
+    });
+});
+
+function pickMonth(el) {
+    document.getElementById('selMonth').value = el.dataset.month;
     document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
 }

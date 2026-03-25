@@ -17,14 +17,25 @@ tr:hover .emp-avatar { transform:scale(1.12); }
 .editable {
     cursor:pointer; border-radius:6px; padding:2px 6px;
     transition:background 0.15s ease;
-    display:inline-block; min-width:40px;
+    display:inline-block; min-width:40px; border: 1.5px solid transparent;
 }
 .editable:hover { background:#f1f5f9; }
 .editable:focus {
     outline:none; background:#eef2ff;
-    box-shadow:0 0 0 2px var(--primary);
+    border-color: var(--primary);
     border-radius:6px;
 }
+
+.editable-select {
+    border: 1.5px solid transparent; border-radius: 6px;
+    padding: 2px 24px 2px 6px; font-size: 0.82rem; outline: none;
+    background-color: transparent; cursor: pointer; transition: all 0.15s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 6px center;
+}
+.editable-select:hover { background-color: #f1f5f9; }
+.editable-select:focus { border-color: var(--primary); background-color: white; box-shadow: 0 0 0 2px rgba(79,70,229,0.1); }
 
 /* quick-add row */
 .qa-row td { background:#f8fafc !important; }
@@ -134,12 +145,16 @@ tr:hover .emp-avatar { transform:scale(1.12); }
                                 </span>
                             </td>
                             <td>
-                                <span class="editable text-muted small"
-                                      contenteditable="true"
-                                      data-eid="{{ e.id }}"
-                                      data-field="jobdesk"
-                                      onblur="saveInline(this)"
-                                      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ e.jobdesk }}</span>
+                                <select class="editable-select text-muted fw-medium"
+                                        onchange="saveSelect(this, '{{ e.id }}', 'jobdesk')">
+                                    {% set active_jds = data.branch.jobdesks %}
+                                    {% for jd in active_jds %}
+                                    <option value="{{ jd }}" {% if e.jobdesk == jd %}selected{% endif %}>{{ jd }}</option>
+                                    {% endfor %}
+                                    {% if e.jobdesk not in active_jds %}
+                                    <option value="{{ e.jobdesk }}" selected>{{ e.jobdesk }} (Tidak Aktif)</option>
+                                    {% endif %}
+                                </select>
                             </td>
                             <td class="text-end pe-4">
                                 <button class="btn btn-sm btn-link text-danger p-0"
@@ -250,6 +265,18 @@ async function saveInline(el) {
     } catch { gToast('Gagal simpan',false); }
 }
 
+async function saveSelect(el, eid, field) {
+    const val = el.value;
+    try {
+        const r = await fetch(`/employees/inline/${eid}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({field, value:val})
+        });
+        if(r.ok) gToast('Jobdesk diperbarui');
+        else gToast('Gagal simpan',false);
+    } catch { gToast('Gagal simpan',false); }
+}
+
 /* ── Toggle gender (cycle P↔W) ── */
 async function toggleGender(badge, eid, cur) {
     const next = cur==='P'?'W':'P';
@@ -266,9 +293,16 @@ async function toggleGender(badge, eid, cur) {
 }
 
 /* ── Build a new employee <tr> from data ── */
-function buildEmpRow(emp) {
+function buildEmpRow(emp, bid) {
     const isMale = emp.gender === 'P';
     const initials = emp.name.slice(0,2).toUpperCase();
+    
+    // Copy options from quick-add select for this branch
+    let jdOptions = '';
+    const qaSelect = document.getElementById('qa-jd-' + bid);
+    if (qaSelect) { jdOptions = qaSelect.innerHTML; }
+    else { jdOptions = `<option value="${emp.jobdesk}">${emp.jobdesk}</option>`; }
+
     const tr = document.createElement('tr');
     tr.className = 'emp-row';
     tr.dataset.name = emp.name.toLowerCase();
@@ -292,11 +326,9 @@ function buildEmpRow(emp) {
             </span>
         </td>
         <td>
-            <span class="editable text-muted small" contenteditable="true"
-                  data-eid="${emp.id}" data-field="jobdesk"
-                  onblur="saveInline(this)"
-                  onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
-            >${emp.jobdesk}</span>
+            <select class="editable-select text-muted fw-medium" onchange="saveSelect(this, '${emp.id}', 'jobdesk')">
+                ${jdOptions}
+            </select>
         </td>
         <td class="text-end pe-4">
             <button class="btn btn-sm btn-link text-danger p-0"
@@ -304,6 +336,11 @@ function buildEmpRow(emp) {
                 <i class="bi bi-trash"></i>
             </button>
         </td>`;
+        
+    // Set the selected value
+    const sel = tr.querySelector('select');
+    if (sel) sel.value = emp.jobdesk;
+    
     return tr;
 }
 
@@ -347,7 +384,7 @@ async function modalAdd() {
         // Inject row ke tbody yang tepat (cari qa-row cabang yang sesuai)
         const qaRow = document.getElementById('qa-' + branch);
         if (qaRow) {
-            const newTr = buildEmpRow(data.employee);
+            const newTr = buildEmpRow(data.employee, branch);
             qaRow.parentNode.insertBefore(newTr, qaRow);
         }
         bootstrap.Modal.getInstance(document.getElementById('empModal')).hide();
@@ -376,7 +413,7 @@ async function quickAdd(bid) {
     const data = await r.json();
     if (data.success) {
         const qaRow = document.getElementById('qa-'+bid);
-        const newTr = buildEmpRow(data.employee);
+        const newTr = buildEmpRow(data.employee, bid);
         qaRow.parentNode.insertBefore(newTr, qaRow);
         document.getElementById('qa-name-'+bid).value = '';
         gToast(name + ' ditambahkan!');

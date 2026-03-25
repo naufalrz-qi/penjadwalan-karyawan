@@ -4,13 +4,14 @@
 {% block extra_head %}
 <style>
 @keyframes sIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-.s-card { animation:sIn 0.4s cubic-bezier(0.22,1,0.36,1) both; border-radius:16px !important; }
+@keyframes tagIn { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
+
+.s-card { animation:sIn 0.4s cubic-bezier(0.22,1,0.36,1) both; border-radius:16px!important; }
 .branch-icon { width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#4f46e5,#6366f1);color:white;display:flex;align-items:center;justify-content:center;font-size:0.9rem;box-shadow:0 4px 10px rgba(79,70,229,0.25);transition:transform 0.2s;flex-shrink:0; }
 .s-card:hover .branch-icon { transform:rotate(-6deg) scale(1.08); }
 
 .tag-wrap { display:flex;flex-wrap:wrap;gap:0.4rem;padding:0.65rem 0.9rem;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;min-height:48px;align-items:center;transition:border-color 0.2s,box-shadow 0.2s; }
 .tag-wrap:focus-within { border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
-@keyframes tagIn { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
 .jd-pill { display:inline-flex;align-items:center;background:white;border:1.5px solid #e0e7ff;color:#1e40af;font-size:0.75rem;font-weight:600;padding:0.25em 0.65em;border-radius:20px;box-shadow:0 1px 3px rgba(79,70,229,0.1);animation:tagIn 0.2s cubic-bezier(0.22,1,0.36,1) both; }
 .jd-pill-del { color:#94a3b8;cursor:pointer;margin-left:0.35rem;font-size:0.6rem;transition:color 0.15s,transform 0.15s; }
 .jd-pill-del:hover { color:#ef4444;transform:scale(1.3); }
@@ -25,147 +26,301 @@
 .time-input { border:1.5px solid #e2e8f0;border-radius:10px;padding:0.4rem 0.75rem;font-size:0.85rem;font-weight:600;outline:none;width:110px;transition:border-color 0.2s,box-shadow 0.2s; }
 .time-input:focus { border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
 
-.modal-content { border-radius:20px !important;border:none !important; }
+.modal-content { border-radius:20px!important;border:none!important; }
 .modal-header { background:linear-gradient(135deg,#f8faff,#eef2ff);border-radius:20px 20px 0 0;border-bottom:1px solid #e0e7ff; }
 .modal.fade .modal-dialog { transform:translateY(24px) scale(0.97);transition:transform 0.3s cubic-bezier(0.22,1,0.36,1); }
 .modal.show .modal-dialog { transform:none; }
 .form-control { border-radius:10px;border:1.5px solid #e2e8f0;transition:border-color 0.2s,box-shadow 0.2s; }
 .form-control:focus { border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+
+/* Toast */
+#toast-wrap { position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none; }
+.toast-msg { background:#0f172a;color:white;padding:0.65rem 1.1rem;border-radius:12px;font-size:0.82rem;font-weight:500;opacity:0;transform:translateY(8px);transition:all 0.25s cubic-bezier(0.22,1,0.36,1); }
+.toast-msg.in { opacity:1;transform:translateY(0); }
+.toast-msg.success { background:#16a34a; }
+.toast-msg.error { background:#dc2626; }
+
+/* Skeleton loader */
+.skeleton { background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px; }
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid px-4 py-4" style="max-width:860px;">
-    <h1 class="h3 fw-800 mb-1" style="font-weight:800;letter-spacing:-0.5px;">Pengaturan</h1>
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <h1 class="h3 fw-800 mb-0" style="font-weight:800;letter-spacing:-0.5px;">Pengaturan</h1>
+    </div>
     <p class="text-muted small mb-4">Atur jam shift dan struktur cabang</p>
 
-    <!-- Shift hours -->
+    <!-- Shift hours card -->
     <div class="card s-card border-0 shadow-sm mb-4 p-4" style="animation-delay:0ms">
-        <form method="POST" action="{{ url_for('settings') }}" class="row g-3 align-items-end">
-            <div class="col-12"><h6 class="fw-bold mb-0"><i class="bi bi-clock me-2 text-primary"></i>Jam Shift</h6></div>
+        <h6 class="fw-bold mb-3"><i class="bi bi-clock me-2 text-primary"></i>Jam Shift</h6>
+        <div class="row g-3 align-items-end">
             <div class="col-sm-5">
                 <label class="small text-muted fw-semibold d-block mb-1">PAGI</label>
                 <div class="d-flex align-items-center gap-2">
-                    <input type="time" name="pagi_start" class="time-input" value="{{ settings.shift_pagi.start }}">
+                    <input type="time" id="pagi_start" class="time-input">
                     <span class="text-muted small">–</span>
-                    <input type="time" name="pagi_end"   class="time-input" value="{{ settings.shift_pagi.end }}">
+                    <input type="time" id="pagi_end" class="time-input">
                 </div>
             </div>
             <div class="col-sm-5">
                 <label class="small text-muted fw-semibold d-block mb-1">SIANG</label>
                 <div class="d-flex align-items-center gap-2">
-                    <input type="time" name="siang_start" class="time-input" value="{{ settings.shift_siang.start }}">
+                    <input type="time" id="siang_start" class="time-input">
                     <span class="text-muted small">–</span>
-                    <input type="time" name="siang_end"   class="time-input" value="{{ settings.shift_siang.end }}">
+                    <input type="time" id="siang_end" class="time-input">
                 </div>
             </div>
             <div class="col-sm-2">
-                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-save me-1"></i>Simpan</button>
+                <button id="btnSaveShift" class="btn btn-primary w-100" onclick="saveShift()">
+                    <i class="bi bi-save me-1"></i>Simpan
+                </button>
             </div>
-        </form>
+        </div>
     </div>
 
-    <!-- Branches -->
+    <!-- Branches header -->
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Cabang & Jobdesk</h6>
+        <h6 class="fw-bold mb-0"><i class="bi bi-building me-2 text-primary"></i>Cabang &amp; Jobdesk</h6>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBranchModal">
             <i class="bi bi-plus-lg me-1"></i> Tambah Cabang
         </button>
     </div>
 
-    {% for b in settings.branches %}
-    <div class="card s-card border-0 shadow-sm mb-3 p-4" {{ ('style="animation-delay:' ~ (loop.index * 70) ~ 'ms;"') | safe }}>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div class="d-flex align-items-center gap-3">
-                <div class="branch-icon"><i class="bi bi-building"></i></div>
-                <span class="fw-bold">{{ b.name }}</span>
-            </div>
-            <form action="{{ url_for('delete_branch', bid=b.id) }}" method="POST"
-                  onsubmit="return confirm('Hapus cabang {{ b.name }}?')">
-                <button class="btn-del-b"><i class="bi bi-trash"></i></button>
-            </form>
-        </div>
-
-        <form action="{{ url_for('edit_branch', bid=b.id) }}" method="POST" id="bf-{{ b.id }}">
-            <input type="hidden" name="name" value="{{ b.name }}">
-            <label class="small text-muted fw-semibold mb-2 d-block" style="letter-spacing:0.04em;font-size:0.68rem;">JOBDESK</label>
-            <div class="tag-wrap mb-3" id="tw-{{ b.id }}">
-                {% for jd in b.jobdesks %}
-                <div class="jd-pill">
-                    <span>{{ jd }}</span>
-                    <input type="hidden" name="jobdesks_list[]" value="{{ jd }}">
-                    <i class="bi bi-x-lg jd-pill-del" onclick="delTag(this)"></i>
-                </div>
-                {% endfor %}
-                <input class="tag-input" placeholder="+ Ketik & Enter"
-                       onkeypress="addTag(event,'{{ b.id }}')">
-            </div>
-            <textarea name="jobdesks" id="jdt-{{ b.id }}" class="d-none"></textarea>
-            <button type="button" class="btn btn-save-b" onclick="saveBranch('{{ b.id }}')">
-                <i class="bi bi-check2 me-1"></i>Simpan
-            </button>
-        </form>
+    <!-- Branch list (rendered by JS) -->
+    <div id="branchList">
+        <!-- Skeleton -->
+        <div class="skeleton mb-3" style="height:120px;"></div>
+        <div class="skeleton mb-3" style="height:120px;opacity:0.6;"></div>
     </div>
-    {% else %}
-    <div class="text-center py-5 text-muted">
+
+    <div id="emptyBranch" class="text-center py-5 text-muted d-none">
         <i class="bi bi-building-add display-6 mb-3 d-block"></i>
         Belum ada cabang. Tambah cabang pertama.
     </div>
-    {% endfor %}
 </div>
+
+<!-- Toast container -->
+<div id="toast-wrap"></div>
 {% endblock %}
 
 {% block modals %}
 <!-- Add branch modal -->
 <div class="modal fade" id="addBranchModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
-        <form action="{{ url_for('add_branch') }}" method="POST">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Tambah Cabang</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <label class="form-label small fw-semibold">Nama Cabang</label>
-                    <input type="text" name="name" class="form-control" required placeholder="Contoh: Cabang Selatan">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary">Tambah</button>
-                </div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Tambah Cabang</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-        </form>
+            <div class="modal-body">
+                <label class="form-label small fw-semibold">Nama Cabang</label>
+                <input type="text" id="newBranchName" class="form-control" placeholder="Contoh: Cabang Selatan"
+                       onkeydown="if(event.key==='Enter'){addBranch();}">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" onclick="addBranch()">Tambah</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let settings = null;
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', loadSettings);
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    return res.json();
+}
+
+function toast(msg, type = '') {
+    const wrap = document.getElementById('toast-wrap');
+    const el   = document.createElement('div');
+    el.className = `toast-msg${type ? ' ' + type : ''}`;
+    el.textContent = msg;
+    wrap.appendChild(el);
+    requestAnimationFrame(() => { el.classList.add('in'); });
+    setTimeout(() => {
+        el.classList.remove('in');
+        setTimeout(() => el.remove(), 300);
+    }, 2800);
+}
+
+// ── Load & Render ─────────────────────────────────────────────────────────────
+async function loadSettings() {
+    const data = await api('GET', '/api/settings');
+    settings = data;
+    renderShift(data);
+    renderBranches(data.branches || []);
+}
+
+function renderShift(data) {
+    const sp = data.shift_pagi  || {};
+    const ss = data.shift_siang || {};
+    document.getElementById('pagi_start').value  = sp.start || '';
+    document.getElementById('pagi_end').value    = sp.end   || '';
+    document.getElementById('siang_start').value = ss.start || '';
+    document.getElementById('siang_end').value   = ss.end   || '';
+}
+
+function renderBranches(branches) {
+    const list  = document.getElementById('branchList');
+    const empty = document.getElementById('emptyBranch');
+    list.innerHTML = '';
+    if (!branches.length) {
+        empty.classList.remove('d-none');
+        return;
+    }
+    empty.classList.add('d-none');
+    branches.forEach((b, idx) => {
+        list.insertAdjacentHTML('beforeend', branchCard(b, idx));
+    });
+}
+
+function branchCard(b, idx) {
+    const delay = idx * 70;
+    const pills = b.jobdesks.map(jd => pillHTML(jd)).join('');
+    return `
+    <div class="card s-card border-0 shadow-sm mb-3 p-4" style="animation-delay:${delay}ms;" id="bc-${b.id}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="branch-icon"><i class="bi bi-building"></i></div>
+                <span class="fw-bold">${escHtml(b.name)}</span>
+            </div>
+            <button class="btn-del-b" onclick="deleteBranch('${b.id}', '${escHtml(b.name)}')" title="Hapus cabang">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+        <label class="small text-muted fw-semibold mb-2 d-block" style="letter-spacing:0.04em;font-size:0.68rem;">JOBDESK</label>
+        <div class="tag-wrap mb-3" id="tw-${b.id}">
+            ${pills}
+            <input class="tag-input" placeholder="+ Ketik &amp; Enter"
+                   onkeydown="addTag(event,'${b.id}')">
+        </div>
+        <button class="btn btn-save-b" onclick="saveBranch('${b.id}')">
+            <i class="bi bi-check2 me-1"></i>Simpan
+        </button>
+    </div>`;
+}
+
+function pillHTML(jd) {
+    return `<div class="jd-pill">
+        <span>${escHtml(jd)}</span>
+        <i class="bi bi-x-lg jd-pill-del" onclick="delTag(this)"></i>
+    </div>`;
+}
+
+function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Shift save ─────────────────────────────────────────────────────────────────
+async function saveShift() {
+    const btn = document.getElementById('btnSaveShift');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    const res = await api('PUT', '/api/settings/shift', {
+        pagi_start:  document.getElementById('pagi_start').value,
+        pagi_end:    document.getElementById('pagi_end').value,
+        siang_start: document.getElementById('siang_start').value,
+        siang_end:   document.getElementById('siang_end').value,
+    });
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-save me-1"></i>Simpan';
+    if (res.success) toast('Jam shift disimpan', 'success');
+    else toast('Gagal menyimpan jam shift', 'error');
+}
+
+// ── Add branch ────────────────────────────────────────────────────────────────
+async function addBranch() {
+    const input = document.getElementById('newBranchName');
+    const name  = input.value.trim();
+    if (!name) { input.focus(); return; }
+    const res = await api('POST', '/api/settings/branch', { name });
+    if (res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('addBranchModal'))?.hide();
+        input.value = '';
+        settings.branches = settings.branches || [];
+        settings.branches.push(res.branch);
+        renderBranches(settings.branches);
+        toast(`Cabang "${name}" ditambahkan`, 'success');
+    } else {
+        toast(res.error || 'Gagal menambah cabang', 'error');
+    }
+}
+
+// ── Delete branch ─────────────────────────────────────────────────────────────
+async function deleteBranch(bid, name) {
+    if (!confirm(`Hapus cabang "${name}"?`)) return;
+    const card = document.getElementById('bc-' + bid);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+    const res = await api('DELETE', `/api/settings/branch/${bid}`);
+    if (res.success) {
+        settings.branches = (settings.branches || []).filter(b => b.id !== bid);
+        renderBranches(settings.branches);
+        toast(`Cabang "${name}" dihapus`, 'success');
+    } else {
+        if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
+        toast(res.error || 'Gagal menghapus cabang', 'error');
+    }
+}
+
+// ── Tag management ────────────────────────────────────────────────────────────
 function delTag(icon) {
     const pill = icon.closest('.jd-pill');
-    pill.style.cssText='transform:scale(0);opacity:0;transition:all 0.18s';
-    setTimeout(()=>pill.remove(), 180);
+    pill.style.cssText = 'transform:scale(0);opacity:0;transition:all 0.18s';
+    setTimeout(() => pill.remove(), 180);
 }
 
 function addTag(e, bid) {
-    if(e.key!=='Enter') return;
+    if (e.key !== 'Enter') return;
     e.preventDefault();
     const val = e.target.value.trim();
-    if(!val) return;
-    const wrap = document.getElementById('tw-'+bid);
-    const pill = document.createElement('div'); pill.className='jd-pill';
-    pill.innerHTML=`<span>${val}</span><input type="hidden" name="jobdesks_list[]" value="${val}"><i class="bi bi-x-lg jd-pill-del" onclick="delTag(this)"></i>`;
-    wrap.insertBefore(pill, e.target);
-    e.target.value='';
+    if (!val) return;
+    const wrap = document.getElementById('tw-' + bid);
+    wrap.insertAdjacentHTML('beforeend', pillHTML(val));
+    // Move the input to the end
+    wrap.appendChild(e.target);
+    e.target.value = '';
 }
 
-function saveBranch(bid) {
-    const form=document.getElementById('bf-'+bid);
-    const tags=form.querySelectorAll('input[name="jobdesks_list[]"]');
-    document.getElementById('jdt-'+bid).value=[...tags].map(t=>t.value).join('\n');
-    const btn=form.querySelector('.btn-save-b');
-    btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>';
-    form.submit();
+// ── Save branch jobdesks ──────────────────────────────────────────────────────
+async function saveBranch(bid) {
+    const wrap = document.getElementById('tw-' + bid);
+    const btn  = wrap.closest('.s-card').querySelector('.btn-save-b');
+    // Collect pills currently in the DOM (only visible, non-fading ones)
+    const jobdesks = [...wrap.querySelectorAll('.jd-pill')]
+        .filter(p => p.style.opacity !== '0')
+        .map(p => p.querySelector('span').textContent.trim())
+        .filter(Boolean);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+    const res = await api('PUT', `/api/settings/branch/${bid}`, { jobdesks });
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Simpan';
+
+    if (res.success) {
+        // Sync state
+        const branch = (settings.branches || []).find(b => b.id === bid);
+        if (branch) branch.jobdesks = jobdesks;
+        toast('Jobdesk disimpan', 'success');
+    } else {
+        toast(res.error || 'Gagal menyimpan jobdesk', 'error');
+    }
 }
 </script>
 {% endblock %}

@@ -75,7 +75,7 @@
 .mini-cal th { font-size:0.65rem; text-align:center; color:#94a3b8; padding:0.25rem; font-weight:600; }
 .mini-cal td { padding:0.2rem; text-align:center; }
 .cal-day {
-    width:36px; height:36px; border-radius:8px;
+    width:44px; height:44px; border-radius:8px;
     display:inline-flex; align-items:center; justify-content:center;
     font-size:0.78rem; font-weight:600; cursor:pointer;
     border:2px solid transparent;
@@ -177,7 +177,7 @@
                     <tr>
                         <th class="sticky-col py-3 ps-3">Pegawai</th>
                         {% for d in period.dates %}
-                        <th class="text-center col-date" style="min-width:38px; cursor:pointer; transition:background 0.2s;" title="Set libur seharian" onclick="setColumnOff('{{ d }}')" id="hdr-{{ d }}">
+                        <th class="text-center col-date" style="min-width:44px; cursor:pointer; transition:background 0.2s;" title="Set libur seharian" onclick="setColumnOff('{{ d }}')" id="hdr-{{ d }}">
                             {{ d[8:] }}<br>
                             <span class="opacity-50" style="font-size:0.55rem;">{{ d[5:7] }}</span><br>
                             <span class="day-name" style="font-size:0.5rem;font-weight:700;letter-spacing:0.01em;"></span>

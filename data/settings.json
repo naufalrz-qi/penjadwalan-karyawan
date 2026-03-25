@@ -1,0 +1,30 @@
+{
+  "jobdesks": [
+    "Pagesangan",
+    "Kasir Barang",
+    "Lantai 2",
+    "Lantai 1 Timur",
+    "Lantai 1 Barat",
+    "KA"
+  ],
+  "shift_pagi": {
+    "start": "07:30",
+    "end": "17:00"
+  },
+  "shift_siang": {
+    "start": "12:30",
+    "end": "21:30"
+  },
+  "branches": [
+    {
+      "id": "30ecde3a-22ed-41ff-a876-3c7cdde80de4",
+      "name": "Pagesangan",
+      "jobdesks": []
+    },
+    {
+      "id": "e88452b2-eebb-459b-8819-47615df1996b",
+      "name": "Pusat",
+      "jobdesks": []
+    }
+  ]
+}
