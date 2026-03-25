@@ -64,6 +64,12 @@ def save_employees(d):
     _write(EMPLOYEES_FILE, d)
 
 
+def load_employees_for_period(period):
+    """Return daftar pegawai yang relevan untuk sebuah period (filter per cabang)."""
+    emps = load_employees()
+    bid  = period.get('branch_id', '') if period else ''
+    return [e for e in emps if e.get('branch') == bid] if bid else emps
+
 def load_settings():
     s = _read(SETTINGS_FILE)
     # ── Backward compat: settings lama tanpa 'branches' ──────────────────────
@@ -159,18 +165,25 @@ def all_jobdesks(settings):
 
 @app.route('/')
 def index():
+    settings  = load_settings()
+    bmap      = branch_map(settings)
     schedules = []
     for pk in list_schedules():
         parts = pk.split('-')
         y, m  = int(parts[0]), int(parts[1])
+        # period_key: YYYY-MM or YYYY-MM-BID
+        bid   = parts[2] if len(parts) > 2 else ''
+        bname = bmap.get(bid, {}).get('name', 'Semua Cabang') if bid else 'Semua Cabang'
         data  = load_schedule(pk)
         schedules.append({
-            'key':       pk,
-            'label':     f"{MONTH_NAMES[m]} {y}",
-            'generated': data.get('generated', False) if data else False,
+            'key':         pk,
+            'label':       f"{MONTH_NAMES[m]} {y}",
+            'branch_name': bname,
+            'generated':   data.get('generated', False) if data else False,
         })
     today = date.today()
-    return render_template('index.html', schedules=schedules, today=today, month_names=MONTH_NAMES[1:])
+    return render_template('index.html', schedules=schedules, today=today,
+                           month_names=MONTH_NAMES[1:], settings=settings)
 
 # ─── Routes: Employees ────────────────────────────────────────────────────────
 
@@ -321,18 +334,24 @@ def api_branch_jobdesks(bid):
 
 @app.route('/schedule/new', methods=['POST'])
 def new_schedule():
-    year  = int(request.form['year'])
-    month = int(request.form['month'])
-    pk    = f'{year}-{month:02d}'
-    
+    year   = int(request.form['year'])
+    month  = int(request.form['month'])
+    bid    = request.form.get('branch', '')
+    # period_key bersifat unik per cabang
+    pk = f'{year}-{month:02d}-{bid}' if bid else f'{year}-{month:02d}'
+
     period = load_schedule(pk)
     if not period:
-        emps  = load_employees()
+        settings = load_settings()
+        emps_all = load_employees()
+        # Filter pegawai sesuai cabang yang dipilih
+        emps = [e for e in emps_all if e.get('branch') == bid] if bid else emps_all
         dates = get_period_dates(year, month)
         period = {
             'period_key': pk,
             'year':       year,
             'month':      month,
+            'branch_id':  bid,
             'label':      f"{MONTH_NAMES[month]} {year}",
             'dates':      dates,
             'off_days':   {e['id']: [] for e in emps},
@@ -341,7 +360,7 @@ def new_schedule():
             'generated':  False,
         }
         save_schedule(pk, period)
-        
+
     if period.get('generated'):
         return redirect(url_for('schedule_view', pk=pk))
     return redirect(url_for('schedule_setup', pk=pk))
@@ -352,14 +371,14 @@ def schedule_setup(pk):
     period = load_schedule(pk)
     if not period:
         return redirect(url_for('index'))
-    
+
     if period.get('generated'):
         return redirect(url_for('schedule_view', pk=pk))
-        
-    emps      = load_employees()
+
+    emps      = load_employees_for_period(period)
     settings  = load_settings()
     by_branch = group_by_branch(emps, settings)
-    
+
     summary = calculate_summary(period, emps)
     return render_template('schedule_setup.html', period=period, by_branch=by_branch, summary=summary)
 
@@ -406,7 +425,7 @@ def auto_off_template(pk):
     if not period:
         return jsonify({'success': False})
         
-    emps = load_employees()
+    emps = load_employees_for_period(period)
     settings = load_settings()
     by_branch = group_by_branch(emps, settings)
     
@@ -448,9 +467,9 @@ def generate(pk):
     period = load_schedule(pk)
     if not period:
         return jsonify({'success': False, 'error': 'Period not found'})
-    emps = load_employees()
+    emps = load_employees_for_period(period)
     if not emps:
-        return jsonify({'success': False, 'error': 'Tidak ada pegawai'})
+        return jsonify({'success': False, 'error': 'Tidak ada pegawai di cabang ini'})
     sched = generate_schedule(period, emps)
     period['schedule']  = sched
     period['generated'] = True
@@ -463,12 +482,11 @@ def schedule_view(pk):
     period = load_schedule(pk)
     if not period:
         return redirect(url_for('index'))
-    emps      = load_employees()
+    emps      = load_employees_for_period(period)
     settings  = load_settings()
     summary   = calculate_summary(period, emps)
     by_branch = group_by_branch(emps, settings)
 
-    # backward compat
     by_jd = {}
     for e in emps:
         by_jd.setdefault(e['jobdesk'], []).append(e)
@@ -477,7 +495,7 @@ def schedule_view(pk):
         'schedule_view.html',
         period=period, employees=emps,
         by_branch=by_branch,
-        by_jobdesk=by_jd,    # backward compat
+        by_jobdesk=by_jd,
         settings=settings,
         summary=summary,
     )

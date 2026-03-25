@@ -136,7 +136,9 @@
                         <div class="month-icon"><i class="bi bi-calendar-event"></i></div>
                         <div>
                             <div class="fw-bold">{{ s.label }}</div>
-                            <div class="text-muted small">Periode: 26 s/d 25</div>
+                            <div class="text-muted small">
+                                <i class="bi bi-building me-1"></i>{{ s.branch_name }} &nbsp;·&nbsp; Periode: 26 s/d 25
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -188,6 +190,16 @@
                             <input type="radio" class="btn-check" name="year" id="y2" value="{{ today.year + 1 }}">
                             <label class="btn btn-sm border-0 rounded-pill px-3" for="y2" style="font-weight:600;">{{ today.year + 1 }}</label>
                         </div>
+                    </div>
+
+                    <!-- Branch selector -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Pilih Cabang</label>
+                        <select name="branch" class="form-select form-select-sm" required>
+                            {% for b in settings.branches %}
+                            <option value="{{ b.id }}">{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <!-- Month grid -->
