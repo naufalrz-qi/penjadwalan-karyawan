@@ -1,13 +1,13 @@
 """
-Aturan penjadwalan:
-  1. Consecutive shifts  : setiap pegawai mendapat shift yang SAMA 2–4 hari berturut-turut,
-                           baru kemudian berganti shift (kecuali ada OFF/CUTI).
-  2. Daily balance       : #PAGI = 40%, #SIANG = 60% per (cabang, jobdesk) per hari.
-  3. Personal balance    : total PAGI ~ 40% total jadwal kerja pegawai sepanjang periode.
-  4. After-OFF/CUTI rule : shift pertama setelah blok OFF/CUTI HARUS BERBEDA
-                           dari shift terakhir sebelum blok OFF/CUTI.
-  5. Gender balance      : Proporsi 40:60 (Pagi:Siang) dipastikan secara
-                           independen untuk Laki-laki (P) dan Perempuan (W).
+Aturan penjadwalan (Revisi V2):
+  1. Pola Shift: Minimal 1-3 pergantian shift di antara hari OFF (dinamis tergantung panjang blok).
+  2. Hierarki Pengelompokan: Jobdesk > Gender (min 2 balance) > Pegawai.
+  3. After-OFF Rule: Shift pertama setelah OFF harus berbeda dari shift terakhir sebelum OFF.
+  4. Ketetapan OFF: Ditentukan oleh user.
+  5. Proporsi Ganjil/Genap:
+     - Headcount Ganjil -> Siang lebih banyak.
+     - Headcount Genap -> 50:50.
+  6. General Base fallback: Jika jobdesk hanya 1-2 orang beda gender, ikut proporsi kategori jobdesk-nya.
 """
 
 import random
@@ -20,10 +20,7 @@ OPPOSITE = {'PAGI': 'SIANG', 'SIANG': 'PAGI'}
 # ─── Public helpers ───────────────────────────────────────────────────────────
 
 def get_period_dates(year, month):
-    """Kembalikan list tanggal ISO dari tgl 26 bulan lalu s/d 25 bulan ini.
-    Contoh: April → 26 Maret s/d 25 April (selalu 31 hari).
-    """
-    # Bulan sebelumnya
+    """Kembalikan list tanggal ISO dari tgl 26 bulan lalu s/d 25 bulan ini."""
     if month == 1:
         prev_year, prev_month = year - 1, 12
     else:
@@ -62,384 +59,147 @@ def _last_shift(schedule, eid, all_dates, up_to_idx):
     return None
 
 
+def _get_target_proportions(count):
+    """Aturan 5: Ganjil (Siang > Pagi), Genap (50:50)."""
+    if count == 0: return 0, 0
+    if count % 2 != 0:
+        pagi = count // 2
+        siang = count - pagi
+    else:
+        pagi = siang = count // 2
+    return pagi, siang
+
+
+def _group_employees_new(employees):
+    """Aturan 2 & 6: Jobdesk > Gender balance fallback."""
+    by_jd = {}
+    for emp in employees:
+        by_jd.setdefault(emp['jobdesk'], []).append(emp)
+
+    groups, general_base = [], []
+
+    for jd, emps in by_jd.items():
+        if len(emps) == 1:
+            general_base.extend(emps)
+            continue
+        if len(emps) == 2 and len({e['gender'] for e in emps}) == 2:
+            general_base.extend(emps)
+            continue
+
+        males = [e for e in emps if e['gender'] == 'P']
+        females = [e for e in emps if e['gender'] == 'W']
+
+        if len(males) >= 2 and len(females) >= 2:
+            groups.append({'type': 'gender', 'label': f"{jd}-M", 'emps': males, 'jd': jd})
+            groups.append({'type': 'gender', 'label': f"{jd}-F", 'emps': females, 'jd': jd})
+        else:
+            groups.append({'type': 'jobdesk', 'label': jd, 'emps': emps, 'jd': jd})
+    
+    return groups, general_base
+
+
+def _generate_block_pattern(length, start_shift, rng):
+    """Aturan 1: 1-3 pergantian shift dinamis sesuai panjang blok."""
+    if length <= 0: return []
+    if length <= 2: num_transitions = 0
+    elif length <= 4: num_transitions = 1
+    elif length <= 6: num_transitions = rng.randint(1, 2)
+    else: num_transitions = rng.randint(2, 3)
+    
+    current_shift = start_shift if start_shift else rng.choice(['PAGI', 'SIANG'])
+    pattern = []
+    if num_transitions == 0:
+        return [current_shift] * length
+    
+    points = sorted(rng.sample(range(1, length), num_transitions))
+    for i in range(length):
+        if i in points: current_shift = OPPOSITE[current_shift]
+        pattern.append(current_shift)
+    return pattern
+
+
 # ─── Core scheduler ──────────────────────────────────────────────────────────
 
 def generate_schedule(period_data, employees):
-    """
-    Buat jadwal shift dengan:
-      - Blok 2–4 hari berturut-turut (consecutive) per pegawai.
-      - Staggering fase awal antar pegawai agar tidak semua ganti shift bareng.
-      - Daily 40% PAGI dan 60% SIANG per (cabang, jobdesk) dipastikan per gender.
-      - After-OFF/CUTI: otomatis flip shift.
-      - Proper random seed using current time for varied results.
-      - Block lengths of 2-4 always, min 1 only adjacent to OFF/CUTI.
-      - Bypass jobdesk rules when only 1 person in jobdesk.
-      - Respect pre-existing PAGI/SIANG entries from setup.
-    """
-    # Seed the random number generator with current time for varied results
+    """Main Scheduler V2."""
     random.seed(time.time())
-
     all_dates = period_data['dates']
+    pk = period_data.get('period_key', 'gen')
+    
     off_map   = {k: set(v) for k, v in period_data.get('off_days',  {}).items()}
     cuti_map  = {k: set(v) for k, v in period_data.get('cuti_days', {}).items()}
+    fixed = {e['id']: {d: ('OFF' if d in off_map.get(e['id'], set()) else 
+                           'CUTI' if d in cuti_map.get(e['id'], set()) else None) 
+                       for d in all_dates} for e in employees}
 
-    # fixed[eid][date] = 'OFF' | 'CUTI' | None (hari kerja)
-    fixed = {}
-    for emp in employees:
-        eid = emp['id']
-        fixed[eid] = {
-            d: ('OFF'  if d in off_map.get(eid,  set()) else
-                'CUTI' if d in cuti_map.get(eid, set()) else None)
-            for d in all_dates
-        }
-
-    schedule = {emp['id']: {} for emp in employees}
-
-    # Tulis status tetap (OFF/CUTI) dan pre-existing PAGI/SIANG langsung
-    for emp in employees:
-        eid = emp['id']
+    schedule = {e['id']: {} for e in employees}
+    for eid in schedule:
         for d in all_dates:
-            if fixed[eid][d] is not None:
-                schedule[eid][d] = fixed[eid][d]
+            if fixed[eid][d]: schedule[eid][d] = fixed[eid][d]
             elif eid in period_data.get('schedule', {}) and d in period_data['schedule'][eid]:
-                # Respect pre-existing PAGI/SIANG entries
-                pre_existing_shift = period_data['schedule'][eid][d]
-                if pre_existing_shift in ('PAGI', 'SIANG'):
-                    schedule[eid][d] = pre_existing_shift
+                val = period_data['schedule'][eid][d]
+                if val in ('PAGI', 'SIANG'): schedule[eid][d] = val
 
-    # Kelompokkan per (cabang, jobdesk)
-    by_bjd = {}
-    for emp in employees:
-        key = (emp.get('branch', ''), emp['jobdesk'])
-        by_bjd.setdefault(key, []).append(emp)
+    groups, general_base = _group_employees_new(employees)
 
-    # Total hari kerja per pegawai (untuk personal balance)
-    total_work = {
-        emp['id']: sum(1 for d in all_dates if fixed[emp['id']][d] is None and schedule[emp['id']].get(d) not in ('PAGI', 'SIANG'))
-        for emp in employees
-    }
-    emp_pagi  = {emp['id']: sum(1 for s in schedule[emp['id']].values() if s == 'PAGI') for emp in employees}
-    emp_siang = {emp['id']: sum(1 for s in schedule[emp['id']].values() if s == 'SIANG') for emp in employees}
+    # Fill Blocks
+    all_target_groups = groups + ([{'emps': [e for e in general_base if e['jobdesk'] == jd], 'jd': jd} 
+                                  for jd in {e['jobdesk'] for e in general_base}] if general_base else [])
 
-    # ── Inisialisasi state streak per pegawai ─────────────────────────────────
-    #
-    # State: shift (shift aktif), remaining (sisa hari paksa di shift ini), rng
-    #
-    # Staggering:
-    #   Pegawai diproses terpisah per gender. Diset 40% awal PAGI (idx mod 5 < 2).
-    #   Phase_used (0-3) = seolah-olah sudah menggunakan beberapa hari dari blok pertama,
-    #   sehingga antar pegawai tidak ganti shift pada hari yang sama.
-    #
-    emp_state = {}
-    for (branch, jd), emps in by_bjd.items():
-        males   = [e for e in emps if e['gender'] == 'P']
-        females = [e for e in emps if e['gender'] == 'W']
+    for group in all_target_groups:
+        for emp in group['emps']:
+            eid, in_block = emp['id'], []
+            rng = random.Random(f"{eid}-{pk}")
+            for i, d in enumerate(all_dates):
+                if fixed[eid][d] is None: in_block.append(i)
+                if (fixed[eid][d] or i == len(all_dates)-1) and in_block:
+                    ls = _last_shift(schedule, eid, all_dates, in_block[0])
+                    start_sh = OPPOSITE[ls] if ls else rng.choice(['PAGI', 'SIANG'])
+                    pattern = _generate_block_pattern(len(in_block), start_sh, rng)
+                    for idx, day_idx in enumerate(in_block):
+                        if schedule[eid].get(all_dates[day_idx]) not in ('PAGI', 'SIANG', 'OFF', 'CUTI'):
+                            schedule[eid][all_dates[day_idx]] = pattern[idx]
+                    in_block = []
 
-        def _init_group(group):
-            target = round(len(group) * 0.4)
-            for idx, emp in enumerate(group):
-                eid         = emp['id']
-                rng         = random.Random(eid) # Use employee ID as seed for consistent "random" streaks
-                
-                # If there's a pre-existing shift on the first day, use that as start_shift
-                first_working_day_shift = None
-                for d in all_dates:
-                    if fixed[eid][d] is None and schedule[eid].get(d) in ('PAGI', 'SIANG'):
-                        first_working_day_shift = schedule[eid][d]
-                        break
-
-                if first_working_day_shift:
-                    start_shift = first_working_day_shift
-                else:
-                    start_shift = 'PAGI' if idx < target else 'SIANG'
-                
-                phase_used  = idx % 4 # Staggering
-                block_len   = rng.randint(2, 4)
-                remaining   = max(0, block_len - phase_used)
-                
-                emp_state[eid] = {
-                    'shift':     start_shift,
-                    'remaining': remaining,
-                    'rng':       rng,
-                }
+    # 6. Balancing Harian (Aggressive Proportion Fix per Jobdesk)
+    # Kita kumpulkan semua pegawai per Jobdesk agar balancing lebih fleksibel
+    all_jds = {e['jobdesk'] for e in employees}
+    for jd in all_jds:
+        jd_emps = [e for e in employees if e['jobdesk'] == jd]
+        target_p, _ = _get_target_proportions(len(jd_emps))
+        ratio_p = target_p / len(jd_emps) if len(jd_emps) > 0 else 0.5
         
-        _init_group(males)
-        _init_group(females)
-
-    # ── Penugasan hari per hari ───────────────────────────────────────────────
-    for d_idx, d in enumerate(all_dates):
-        for (branch, jd), emps in by_bjd.items():
-            # Filter employees who are not OFF/CUTI and don't have a pre-existing shift for today
-            working = [e for e in emps if fixed[e['id']][d] is None and schedule[e['id']].get(d) not in ('PAGI', 'SIANG')]
+        for d_idx, d in enumerate(all_dates):
+            working = [e for e in jd_emps if fixed[e['id']][d] is None]
+            if not working: continue
             
-            if not working:
-                continue
-
-            working_m = [e for e in working if e['gender'] == 'P']
-            working_w = [e for e in working if e['gender'] == 'W']
+            day_target_p = int(len(working) * ratio_p)
             
-            # Bypass jobdesk rules if only 1 person in jobdesk group
-            if len(emps) == 1:
-                # Assign the single person to PAGI or SIANG based on personal balance
-                emp = emps[0]
-                eid = emp['id']
-                if fixed[eid][d] is None and schedule[eid].get(d) not in ('PAGI', 'SIANG'):
-                    # Prioritize PAGI if personal balance is low, otherwise SIANG
-                    if emp_pagi[eid] / (emp_pagi[eid] + emp_siang[eid] + 1) < 0.4: # +1 to avoid division by zero
-                        sh = 'PAGI'
-                    else:
-                        sh = 'SIANG'
-                    schedule[eid][d] = sh
-                    if sh == 'PAGI':
-                        emp_pagi[eid] += 1
-                    else:
-                        emp_siang[eid] += 1
-                continue # Skip normal processing for this group
-
-            target_pagi_m = round(len(working_m) * 0.4)
-            target_pagi_w = round(len(working_w) * 0.4)
-
-            # forced : eid → shift (mid-streak ATAU baru balik dari OFF)
-            # free_m/w : pegawai yang mulai blok baru hari ini
-            forced = {}
-            free_m = []
-            free_w = []
-
-            for emp in working:
-                eid   = emp['id']
-                state = emp_state[eid]
-                is_m  = emp['gender'] == 'P'
-
-                prev_off = (d_idx > 0 and
-                            fixed[eid][all_dates[d_idx - 1]] in ('OFF', 'CUTI'))
-
-                if prev_off:
-                    # ─ After-OFF rule ─
-                    ls = _last_shift(schedule, eid, all_dates, d_idx)
-                    if ls:
-                        new_sh = OPPOSITE[ls]
-                        # Mulai blok baru dengan 1-4 hari (inklusif hari ini)
-                        # Block length can be 1 if adjacent to OFF/CUTI
-                        state.update({
-                            'shift':     new_sh,
-                            'remaining': state['rng'].randint(1, 4), # Min 1 day block
-                        })
-                        forced[eid] = new_sh
-                    else:
-                        # If no last shift found (e.g., first working day after a long OFF/CUTI block at start of period)
-                        # Treat as free to assign
-                        if is_m: free_m.append(emp)
-                        else: free_w.append(emp)
-                    continue
-
-                if state['remaining'] > 0:
-                    forced[eid] = state['shift']   # masih dalam streak
+            flexible_ids = []
+            locked_ids = []
+            for e in working:
+                eid = e['id']
+                if d_idx > 0 and fixed[eid][all_dates[d_idx-1]] is not None:
+                    locked_ids.append(eid)
                 else:
-                    if is_m: free_m.append(emp)
-                    else: free_w.append(emp)      # blok habis → mulai baru
-
-            # ── Strict Cap Enforcement ──
-            # Cegah PAGI berlebih (karena overlapping streak atau rule After-OFF)
-            def enforce_cap(gender_list, target_pagi):
-                forced_pagi = [e for e in gender_list if e['id'] in forced and forced[e['id']] == 'PAGI']
-                if len(forced_pagi) > target_pagi:
-                    # Sort berdasarkan yang sudah dapet paling banyak PAGI di assign ke SIANG
-                    forced_pagi.sort(key=lambda e: emp_pagi[e['id']], reverse=True)
-                    excess = len(forced_pagi) - target_pagi
-                    for e in forced_pagi[:excess]:
-                        _eid = e['id']
-                        forced[_eid] = 'SIANG'
-                        emp_state[_eid]['shift'] = 'SIANG'
-                        # Mulai hitungan block SIANG baru yang sedikit lebih pendek
-                        # Block length can be 1 if forced to change due to cap
-                        emp_state[_eid]['remaining'] = max(1, emp_state[_eid]['rng'].randint(2, 4) - 1)
+                    flexible_ids.append(eid)
             
-            enforce_cap(working_m, target_pagi_m)
-            enforce_cap(working_w, target_pagi_w)
-
-            # Tugaskan forced, hitung hari ini per gender
-            day_pagi_m = day_pagi_w = 0
-            for emp in working:
-                eid = emp['id']
-                if eid not in forced:
-                    continue
-                sh    = forced[eid]
-                state = emp_state[eid]
-                schedule[eid][d]   = sh
-                state['remaining'] = max(0, state['remaining'] - 1)
-                
-                is_m = emp['gender'] == 'P'
-                if sh == 'PAGI':
-                    emp_pagi[eid]  += 1
-                    if is_m: day_pagi_m += 1
-                    else: day_pagi_w += 1
-                else:
-                    emp_siang[eid] += 1
-
-            # Hitung sisa slot PAGI yang dibutuhkan hari ini per gender
-            slots_p_m = max(0, min(len(free_m), target_pagi_m - day_pagi_m))
-            slots_p_w = max(0, min(len(free_w), target_pagi_w - day_pagi_w))
-
-            # Urutkan berdasarkan defisit PAGI personal 40% (terbesar → dapat PAGI)
-            sorted_free_m = sorted(
-                free_m,
-                key=lambda e: total_work[e['id']] * 0.4 - emp_pagi[e['id']],
-                reverse=True,
-            )
-            sorted_free_w = sorted(
-                free_w,
-                key=lambda e: total_work[e['id']] * 0.4 - emp_pagi[e['id']],
-                reverse=True,
-            )
-
-            # Tugaskan free employees Laki-laki
-            for i, emp in enumerate(sorted_free_m):
-                eid   = emp['id']
-                sh    = 'PAGI' if i < slots_p_m else 'SIANG'
-                state = emp_state[eid]
-                schedule[eid][d]   = sh
-                state['shift']     = sh
-                state['remaining'] = state['rng'].randint(2, 4) # Normal block length 2-4
-                if sh == 'PAGI':
-                    emp_pagi[eid]  += 1
-                else:
-                    emp_siang[eid] += 1
-
-            # Tugaskan free employees Perempuan
-            for i, emp in enumerate(sorted_free_w):
-                eid   = emp['id']
-                sh    = 'PAGI' if i < slots_p_w else 'SIANG'
-                state = emp_state[eid]
-                schedule[eid][d]   = sh
-                state['shift']     = sh
-                state['remaining'] = state['rng'].randint(2, 4) # Normal block length 2-4
-                if sh == 'PAGI':
-                    emp_pagi[eid]  += 1
-                else:
-                    emp_siang[eid] += 1
-
-    # ── Safety pass: pastikan after-OFF rule tidak dilanggar ─────────────────
-    schedule = _enforce_after_off(schedule, fixed, employees, all_dates)
-    # ── Final pass: pastikan tidak ada streak lebih dari 4 hari ──────────────
-    schedule = _fix_long_streaks(schedule, fixed, employees, all_dates)
-    return schedule
-
-
-def _enforce_after_off(schedule, fixed, employees, all_dates):
-    """
-    Pass terakhir: periksa setiap hari-pertama-kerja setelah OFF/CUTI.
-    Jika shift-nya sama dengan shift sebelum OFF, flip — namun tetap
-    menghormati kuota harian 40% PAGI per gender per (branch, jobdesk).
-
-    Logika:
-    - Hitung jumlah PAGI yang sudah ada di hari d untuk gender yang sama
-      dalam kelompok (branch, jobdesk) yang sama.
-    - Hitung total working (tidak OFF/CUTI) pada hari d untuk kelompok tsb.
-    - target_cap = round(n_working_gender * 0.4)
-    - Jika flip → PAGI tapi hari itu sudah mencapai cap, flip ke SIANG saja.
-    - Jika flip → SIANG tidak ada batasan, langsung dilakukan.
-    """
-    # Buat lookup: emp_id → emp dict
-    emp_map = {e['id']: e for e in employees}
-
-    # Buat lookup: emp_id → (branch, jobdesk)
-    emp_bjd = {
-        e['id']: (e.get('branch', ''), e['jobdesk'])
-        for e in employees
-    }
-
-    # Kelompokkan semua emp per (branch, jobdesk)
-    by_bjd = {}
-    for e in employees:
-        key = (e.get('branch', ''), e['jobdesk'])
-        by_bjd.setdefault(key, []).append(e)
-
-    for emp in employees:
-        eid   = emp['id']
-        bjd   = emp_bjd[eid]
-        gender = emp.get('gender', 'P')
-
-        for d_idx in range(1, len(all_dates)):
-            d    = all_dates[d_idx]
-            prev = all_dates[d_idx - 1]
-
-            if fixed[eid][d] is not None:                    # tetap OFF/CUTI
-                continue
-            if fixed[eid][prev] not in ('OFF', 'CUTI'):      # bukan setelah OFF
-                continue
-
-            cur = schedule[eid].get(d)
-            if cur not in ('PAGI', 'SIANG'):
-                continue
-
-            ls = _last_shift(schedule, eid, all_dates, d_idx)
-            if not ls or cur != ls:
-                continue  # tidak perlu flip
-
-            # Perlu flip dari cur ke OPPOSITE[cur]
-            want = OPPOSITE[cur]
-
-            if want == 'PAGI':
-                # Cek apakah kuota PAGI harian sudah penuh untuk gender ini
-                group = by_bjd.get(bjd, [])
-                working_gender = [
-                    e for e in group
-                    if e['gender'] == gender and fixed[e['id']][d] is None
-                ]
-                cap = round(len(working_gender) * 0.4)
-                pagi_now = sum(
-                    1 for e in working_gender
-                    if schedule.get(e['id'], {}).get(d) == 'PAGI'
-                )
-                if pagi_now >= cap:
-                    # Kuota penuh → tetap SIANG (jangan flip)
-                    # Hanya pastikan cur tidak sama dengan ls sesuai aturan;
-                    # jika memang harus beda dan PAGI penuh, pakai SIANG.
+            pagi_now = [eid for eid in [e['id'] for e in working] if schedule[eid].get(d) == 'PAGI']
+            siang_now = [eid for eid in [e['id'] for e in working] if schedule[eid].get(d) == 'SIANG']
+            
+            # Jika kelebihan PAGI
+            if len(pagi_now) > day_target_p:
+                excess = len(pagi_now) - day_target_p
+                flex_pagi = [eid for eid in flexible_ids if eid in pagi_now]
+                random.shuffle(flex_pagi)
+                for eid in flex_pagi[:excess]:
                     schedule[eid][d] = 'SIANG'
-                    continue
-
-            schedule[eid][d] = want
-
-    return schedule
-
-
-def _fix_long_streaks(schedule, fixed, employees, all_dates):
-    """
-    Pass terakhir mutlak: scan setiap pegawai dan pastikan tidak ada
-    streak PAGI atau SIANG yang lebih dari 4 hari kerja berturut-turut.
-
-    Algoritma:
-    1. Bangun daftar indeks 'hari kerja' (tidak OFF/CUTI) per pegawai.
-    2. Iterasi dengan sliding window; jika streak saat posisi ke-5
-       masih sama dengan hari 1-4, flip ke OPPOSITE.
-    3. Flip hanya terjadi pada PAGI/SIANG — tidak menyentuh OFF/CUTI.
-    """
-    for emp in employees:
-        eid = emp['id']
-        # Kumpulkan indeks hari kerja (bukan OFF/CUTI)
-        work_indices = [
-            i for i, d in enumerate(all_dates)
-            if fixed[eid][d] is None and schedule[eid].get(d) in ('PAGI', 'SIANG')
-        ]
-
-        streak_shift = None
-        streak_len   = 0
-
-        for wi in work_indices:
-            d  = all_dates[wi]
-            st = schedule[eid][d]  # 'PAGI' or 'SIANG'
-
-            if st == streak_shift:
-                streak_len += 1
-            else:
-                streak_shift = st
-                streak_len   = 1
-
-            if streak_len > 4:
-                # Flip ke OPPOSITE dan reset streak
-                new_sh = OPPOSITE[st]
-                schedule[eid][d] = new_sh
-                streak_shift = new_sh
-                streak_len   = 1
+            # Jika kekurangan PAGI
+            elif len(pagi_now) < day_target_p:
+                needed = day_target_p - len(pagi_now)
+                flex_siang = [eid for eid in flexible_ids if eid in siang_now]
+                random.shuffle(flex_siang)
+                for eid in flex_siang[:needed]:
+                    schedule[eid][d] = 'PAGI'
 
     return schedule
